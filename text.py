@@ -14,8 +14,14 @@ def process_video_transcript(transcript_file_path):
             transcript_text = file.read()
             
         # Process the transcript
-        segments = processor.process_transcript(transcript_text)
-        
+        # segments = processor.create_shorts(transcript_text)
+         # First, segment the text by themes
+        thematic_segments = processor.segment_by_theme(transcript_text)
+
+        # print("thematic_segments", thematic_segments)
+
+        # print("segments", segments)
+
         # Create output directory if it doesn't exist
         output_dir = "processed_content"
         os.makedirs(output_dir, exist_ok=True)
@@ -26,7 +32,7 @@ def process_video_transcript(transcript_file_path):
         
         # Print the results
         print(f"\n=== Processing Results for {os.path.basename(transcript_file_path)} ===\n")
-        for i, segment in enumerate(segments, 1):
+        for i, segment in enumerate(thematic_segments):
             print(f"Segment #{i}")
             print(f"Title: {segment['title']}")
             print(f"Duration: {segment['estimated_duration']}")
@@ -34,7 +40,7 @@ def process_video_transcript(transcript_file_path):
             print(f"Content: {segment['content']}\n")
             print("-" * 50 + "\n")
             
-        return segments
+        return thematic_segments
         
     except FileNotFoundError:
         print(f"Error: Could not find transcript file at {transcript_file_path}")

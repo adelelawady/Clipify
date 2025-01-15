@@ -47,7 +47,7 @@ class SmartTextProcessor:
                         }
                     ],
                     "model": "deepseek-ai/DeepSeek-V3",
-                    "max_tokens": 512,
+                    "max_tokens": 5012,
                     "temperature": 0.7,  # Increased for more creative titles
                     "top_p": 0.9
                 }
@@ -147,7 +147,7 @@ class SmartTextProcessor:
                 
                 Return only the optimized script, no explanations.
                 """
-                
+                print(prompt)
                 response = self.get_ai_response(prompt)
                 try:
                     optimized_text = response['choices'][0]['message']['content'].strip()
@@ -264,94 +264,140 @@ class SmartTextProcessor:
         """Segment text into thematic chunks using AI assistance"""
         
         prompt = f"""
-        Analyze this text and divide it into thematic segments. For each segment, provide a title and content.
-        Format your response as valid JSON with this exact structure:
+        Analyze this text and divide it into 1-2 minute segments. Each segment should be a complete, standalone story.
+
+        Text to analyze: {text}
+
+        Requirements:
+        1. Each segment must be self-contained and make sense on its own
+        2. Include proper context and background in each segment
+        3. Each segment should be 150-300 words (1-2 minutes of speaking)
+        4. Give each segment a compelling title
+        5. Format as valid JSON with this exact structure:
         {{
             "segments": [
-                {{"title": "Clear Title Here", "content": "Full segment content here"}},
-                {{"title": "Another Title", "content": "Another segment content"}}
+                {{
+                    "title": "Compelling Title Here",
+                    "content": "Complete segment content here"
+                }}
             ]
         }}
 
-        Text to analyze:
-        {text}
-
-        Rules:
-        1. Each segment should focus on one main theme or topic
-        2. Titles should be clear and concise (5-10 words)
-        3. Keep segments coherent and self-contained
-        4. Preserve the original meaning and key points
-        5. Return ONLY the JSON response, no additional text
+        Important:
+        - Make each segment work as an independent video
+        - Add necessary context to each segment
+        - Ensure no segment references other segments
+        - Return ONLY valid JSON, no other text
         """
 
-        response = self.get_ai_response(prompt)
         try:
-            # Get the response content
+            response = self.get_ai_response(prompt)
             response_text = response['choices'][0]['message']['content'].strip()
             
-            # Clean the response text to ensure it's valid JSON
-            # Remove any markdown code block indicators if present
+            # Clean the response text
             response_text = response_text.replace('```json', '').replace('```', '').strip()
             
-            # Parse the JSON response
+            # Parse JSON
             import json
             segments_data = json.loads(response_text)
-            
-            # Process each segment
-            processed_segments = []
-            for segment in segments_data['segments']:
-                # Analyze segment metrics
-                processed_segment = {
-                    'title': segment['title'].strip(),
-                    'content': segment['content'].strip(),
-                    'length': len(segment['content']),
-                    'word_count': self.count_words(segment['content']),
-                    'sentiment': self.analyze_sentiment(segment['content']),
-                    'keywords': self.extract_keywords(segment['content']),
-                    'estimated_duration': f"{self.count_words(segment['content']) / self.WORDS_PER_MINUTE:.1f} minutes"
-                }
-                processed_segments.append(processed_segment)
-            
-            return processed_segments
+            # print("segments_data", segments_data)
+            # processed_segments = self.process_segment(segments_data)
+            return segments_data
             
         except Exception as e:
-            print(f"Error processing segments: {e}")
+            print(f"Error in segment_by_theme: {str(e)}")
             print(f"Raw response: {response['choices'][0]['message']['content']}")
             
-            # Fallback: create a single segment if JSON parsing fails
+            # Create a single segment as fallback
             fallback_segment = {
-                'title': 'Complete Content',
+                'title': 'Complete Video Content',
                 'content': text,
                 'length': len(text),
                 'word_count': self.count_words(text),
+                'estimated_duration': f"{self.count_words(text) / self.WORDS_PER_MINUTE:.1f} minutes",
                 'sentiment': self.analyze_sentiment(text),
-                'keywords': self.extract_keywords(text),
-                'estimated_duration': f"{self.count_words(text) / self.WORDS_PER_MINUTE:.1f} minutes"
+                'keywords': self.extract_keywords(text)
             }
             return [fallback_segment]
 
+    def process_segment(self, segments_data):
+        """Process each segment"""
+        processed_segments = []
+        for segment in segments_data['segments']:
+            # Optimize the segment for video
+            optimized_content = self.optimize_segment_for_video(segment['content'])
+
+            # Generate metadata
+            processed_segment = {
+                'title': segment['title'],
+                'content': optimized_content,
+                'length': len(optimized_content),
+                'word_count': self.count_words(optimized_content),
+                'estimated_duration': f"{self.count_words(optimized_content) / self.WORDS_PER_MINUTE:.1f} minutes",
+                'sentiment': self.analyze_sentiment(optimized_content),
+                'keywords': self.extract_keywords(optimized_content)
+            }
+            processed_segments.append(processed_segment)
+        return processed_segments
+
+    def optimize_segment_for_video(self, content):
+        """Optimize a segment for video presentation"""
+        prompt = f"""
+        Transform this content into an engaging, standalone video script:
+
+        {content}
+
+        Requirements:
+        1. Add a strong opening hook
+        2. Include necessary context and background
+        3. Make it completely self-contained
+        4. End with a powerful conclusion
+        5. Use natural, conversational language
+        6. Keep it to 3-5 minutes of speaking time
+        7. Format with clear sections:
+           - Opening Hook
+           - Context/Background
+           - Main Points
+           - Conclusion
+
+        Return only the optimized script, no explanations.
+        """
+        
+        try:
+            response = self.get_ai_response(prompt)
+            return response['choices'][0]['message']['content'].strip()
+        except Exception as e:
+            print(f"Error optimizing segment: {e}")
+            return content
+
     def process_transcript(self, transcript_text):
-        """Process a video transcript into thematic segments"""
+        """Process a video transcript into independent, self-contained segments"""
         
         # First, segment the text by themes
         thematic_segments = self.segment_by_theme(transcript_text)
         
-        # Then optimize each segment
+        # Then optimize each segment to be self-contained
         optimized_segments = []
         
         for segment in thematic_segments:
-            # Optimize the content for video
+            # Optimize the content for standalone video
             prompt = f"""
-            Optimize this text segment for a video clip. Return only the optimized text, no explanations:
+            Transform this text segment into a self-contained, standalone video script that can be published independently.
 
-            {segment['content']}
+            Original text: {segment['content']}
 
-            Make it:
-            1. Engaging and natural to speak
-            2. Clear and focused
-            3. Start with a hook
+            Requirements:
+            1. Add necessary context at the beginning
+            2. Make it completely self-contained (no references to other parts)
+            3. Include a clear introduction and hook
             4. End with a strong conclusion
-            5. Keep main points and key message
+            5. Keep the main message and key points
+            6. Make it engaging and natural to speak
+            7. Ensure it makes sense without any external context
+            8. Add transitional phrases where needed
+            9. Length: aim for 1-2 minutes of speaking time (~150-300 words)
+
+            Return only the optimized script, no explanations.
             """
             
             response = self.get_ai_response(prompt)
@@ -361,15 +407,57 @@ class SmartTextProcessor:
                 # Remove any markdown formatting if present
                 optimized_content = optimized_content.replace('```', '').strip()
                 
+                # Generate a standalone title
+                title_prompt = f"""
+                Create a compelling standalone title for this independent video:
+
+                Content: {optimized_content}
+
+                Requirements:
+                1. Maximum 60 characters
+                2. Must work as a standalone title (no part numbers or references)
+                3. Include relevant emoji if appropriate
+                4. Make it intriguing but not clickbait
+                5. Capture the unique value proposition
+                6. Should make sense without context from other videos
+
+                Return only the title, no explanations.
+                """
+                
+                title_response = self.get_ai_response(title_prompt)
+                title = title_response['choices'][0]['message']['content'].strip()
+                
+                # Generate a hook/description
+                hook_prompt = f"""
+                Create a compelling hook/description for this standalone video:
+
+                Content: {optimized_content}
+
+                Requirements:
+                1. 1-2 sentences maximum
+                2. Must grab attention immediately
+                3. Hint at the value viewer will get
+                4. Be specific to this content
+                5. Work independently of other videos
+
+                Return only the hook, no explanations.
+                """
+                
+                hook_response = self.get_ai_response(hook_prompt)
+                hook = hook_response['choices'][0]['message']['content'].strip()
+                
                 optimized_segment = {
-                    'title': segment['title'],
+                    'title': title,
                     'content': optimized_content,
+                    'hook': hook,
                     'length': len(optimized_content),
                     'word_count': self.count_words(optimized_content),
                     'estimated_duration': f"{self.count_words(optimized_content) / self.WORDS_PER_MINUTE:.1f} minutes",
                     'sentiment': self.analyze_sentiment(optimized_content),
                     'keywords': self.extract_keywords(optimized_content),
-                    'hook': optimized_content.split('.')[0] + '.'
+                    'is_standalone': True,
+                    'social_share_text': f"{title}\n\n{hook}",
+                    'hashtags': self.generate_hashtags(optimized_content)
                 }
                 
                 optimized_segments.append(optimized_segment)
@@ -379,6 +467,31 @@ class SmartTextProcessor:
                 optimized_segments.append(segment)
         
         return optimized_segments
+
+    def generate_hashtags(self, content, max_tags=5):
+        """Generate relevant hashtags for the content"""
+        prompt = f"""
+        Generate {max_tags} relevant hashtags for this content:
+        {content}
+
+        Requirements:
+        1. Start each with #
+        2. No spaces in hashtags
+        3. Mix of broad and specific tags
+        4. All lowercase
+        5. Return only the hashtags separated by spaces
+
+        Example format: #motivation #success #mindset #growth #wisdom
+        """
+        
+        try:
+            response = self.get_ai_response(prompt)
+            hashtags = response['choices'][0]['message']['content'].strip()
+            return hashtags.split()
+        except:
+            # Fallback to basic hashtags from keywords
+            keywords = self.extract_keywords(content)
+            return [f"#{keyword.lower()}" for keyword in keywords[:max_tags]]
 
 def main():
     # Your API key
