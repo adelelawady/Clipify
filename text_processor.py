@@ -268,41 +268,24 @@ class SmartTextProcessor:
             segments = self.get_thematic_segments(text)
             
             if word_timings:
-                # Process word timings for each segment
-                word_list = text.split()
-                current_word_idx = 0
+                # Track overall position in text
+                processed_words = 0
                 
                 for segment in segments['segments']:
-                    segment_words = segment['content'].split()
-                    segment_word_count = len(segment_words)
+                    # Get word timings for this specific segment
+                    segment_timings = self.get_segment_timings(
+                        segment['content'], 
+                        word_timings[processed_words:],  # Pass only remaining timings
+                        start_pos=processed_words
+                    )
                     
-                    # Find word timings for this segment
-                    segment_timings = []
-                    segment_start = None
-                    segment_end = None
+                    # Update segment with timing information
+                    segment['start_time'] = segment_timings['start']
+                    segment['end_time'] = segment_timings['end']
+                    segment['word_timings'] = segment_timings['words']
                     
-                    # Match words and collect timings
-                    for word_data in word_timings:
-                        if current_word_idx < segment_word_count:
-                            segment_timings.append(word_data)
-                            
-                            # Set start time if not set
-                            if segment_start is None:
-                                segment_start = float(word_data['start'])
-                            
-                            # Update end time with each word
-                            segment_end = float(word_data['end'])
-                            
-                            current_word_idx += 1
-                    
-                    # Store timing information in segment
-                    if segment_start is not None and segment_end is not None:
-                        segment['start_time'] = segment_start
-                        segment['end_time'] = segment_end
-                        segment['word_timings'] = segment_timings
-                    
-                    # Reset for next segment
-                    current_word_idx = 0
+                    # Update processed words count
+                    processed_words += len(segment['content'].split())
             
             return segments
             
@@ -310,25 +293,26 @@ class SmartTextProcessor:
             print(f"Error in segment_by_theme: {str(e)}")
             return None
 
-    def get_segment_timings(self, segment_text, word_timings):
+    def get_segment_timings(self, segment_text, word_timings, start_pos=0):
         """Extract timing information for a segment based on word timings"""
         try:
-            segment_words = segment_text.lower().split()
+            segment_words = segment_text.split()
             segment_start = None
             segment_end = None
             segment_word_timings = []
             
-            # Create word timing lookup
-            timing_lookup = {item['word'].lower(): item for item in word_timings}
-            
-            for word in segment_words:
-                if word in timing_lookup:
-                    timing = timing_lookup[word]
+            # Process only the words in this segment
+            for i, word in enumerate(segment_words):
+                if i < len(word_timings):
+                    timing = word_timings[i]
                     segment_word_timings.append(timing)
                     
+                    # Set start time if not set
                     if segment_start is None:
-                        segment_start = timing['start']
-                    segment_end = timing['end']
+                        segment_start = float(timing['start'])
+                    
+                    # Update end time
+                    segment_end = float(timing['end'])
             
             return {
                 'start': segment_start,

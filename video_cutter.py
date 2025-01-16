@@ -14,6 +14,16 @@ class VideoSegmenter:
         self.video_path = video_path
         self.output_dir = "segmented_videos"
         self.target_duration = 60  # Target duration in seconds
+        self.padding = 1.0  # Padding in seconds for end of segments
+        
+        # Get video duration using ffprobe
+        try:
+            probe = ffmpeg.probe(video_path)
+            self.video_duration = float(probe['streams'][0]['duration'])
+        except Exception as e:
+            print(f"Error getting video duration: {e}")
+            self.video_duration = None
+        
         os.makedirs(self.output_dir, exist_ok=True)
 
     def load_json(self, json_path):
@@ -27,7 +37,7 @@ class VideoSegmenter:
 
     def calculate_segment_timing(self, word_timings):
         """
-        Calculate accurate segment timings from word timings
+        Calculate accurate segment timings from word timings with padding
         :param word_timings: List of word timing dictionaries
         :return: tuple of (start_time, end_time)
         """
@@ -39,7 +49,11 @@ class VideoSegmenter:
         
         # Get first and last word timings
         start_time = float(sorted_timings[0]['start'])
-        end_time = float(sorted_timings[-1]['end'])
+        end_time = float(sorted_timings[-1]['end']) + self.padding  # Add padding
+        
+        # Ensure we don't exceed video duration
+        if self.video_duration and end_time > self.video_duration:
+            end_time = self.video_duration
         
         return start_time, end_time
 
@@ -68,6 +82,11 @@ class VideoSegmenter:
             
             if start_time is None or end_time is None:
                 raise ValueError("Could not determine segment timing from word timings")
+
+            # Ensure we don't exceed video duration
+            if self.video_duration and end_time > self.video_duration:
+                print(f"Warning: Segment {segment_index + 1} end time ({end_time:.2f}s) exceeds video duration ({self.video_duration:.2f}s)")
+                end_time = self.video_duration
 
             duration = end_time - start_time
 

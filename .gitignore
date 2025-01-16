@@ -36,6 +36,9 @@ ENV/
 # Project specific
 processed_content/
 transcripts/
+segmented_videos/
+vosk-model-small-en-us/
+__pycache__/
 *.log
 *.json
 *.txt
