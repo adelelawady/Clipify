@@ -100,17 +100,21 @@ class ContentProcessor:
             try:
                 os.makedirs(os.path.dirname(transcript_path), exist_ok=True)
                 
-                # Save transcript text
+                # Save transcript text as a single string
+                transcript_text = result['text']
                 with open(transcript_path, 'w', encoding='utf-8') as f:
-                    f.write(result['text'])
+                    f.write(transcript_text)
                 print(f"Transcript saved to: {transcript_path}")
                 
                 # Save word timings
                 with open(timing_path, 'w', encoding='utf-8') as f:
-                    json.dump(result['word_timings'], f, indent=2)
+                    json.dump({
+                        'transcript': transcript_text,
+                        'word_timings': result['word_timings']
+                    }, f, indent=2)
                 print(f"Word timings saved to: {timing_path}")
                 
-                return result['text']
+                return transcript_text
                 
             except Exception as e:
                 print(f"Error saving transcript or timings: {e}")
@@ -218,7 +222,6 @@ def main():
                 print(f"Time: {segment['start_time']:.2f}s - {segment['end_time']:.2f}s")
             print(f"Content: {segment['content']}")
             print(f"Length: {len(segment['content'])} characters")
-            print(f"Keywords: {', '.join(segment['keywords'])}")
             print("\n" + "="*50 + "\n")
     else:
         print("No content was processed")

@@ -56,3 +56,5 @@ config.py
 # Track specific files despite general exclusion
 !requirements.txt
 !example_config.json 
+
+processed_videos/ 

@@ -268,63 +268,155 @@ class SmartTextProcessor:
             segments = self.get_thematic_segments(text)
             
             if word_timings:
-                # Track overall position in text
-                processed_words = 0
-                
+                # Process each segment to add timing information
                 for segment in segments['segments']:
                     # Get word timings for this specific segment
                     segment_timings = self.get_segment_timings(
                         segment['content'], 
-                        word_timings[processed_words:],  # Pass only remaining timings
-                        start_pos=processed_words
+                        word_timings,
+                        start_pos=0
                     )
                     
                     # Update segment with timing information
-                    segment['start_time'] = segment_timings['start']
-                    segment['end_time'] = segment_timings['end']
-                    segment['word_timings'] = segment_timings['words']
-                    
-                    # Update processed words count
-                    processed_words += len(segment['content'].split())
+                    if segment_timings['start'] is not None:
+                        segment['start_time'] = segment_timings['start']
+                        segment['end_time'] = segment_timings['end']
+                        segment['word_timings'] = segment_timings['words']
+                        segment['operation_status'] = segment_timings['operation_status']
+                    else:
+                        print(f"Warning: Could not find timing for segment: {segment['title']}")
+                        # Add empty timing data to maintain structure
+                        segment['start_time'] = 0
+                        segment['end_time'] = 0
+                        segment['word_timings'] = []
+                        segment['operation_status'] = 'failed'
             
             return segments
             
         except Exception as e:
             print(f"Error in segment_by_theme: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
             return None
 
     def get_segment_timings(self, segment_text, word_timings, start_pos=0):
         """Extract timing information for a segment based on word timings"""
         try:
-            segment_words = segment_text.split()
-            segment_start = None
-            segment_end = None
-            segment_word_timings = []
+            # Ensure word_timings is a list of dictionaries
+            if not isinstance(word_timings, list):
+                if isinstance(word_timings, dict) and 'word_timings' in word_timings:
+                    word_timings = word_timings['word_timings']
+                else:
+                    print("Error: Invalid word_timings format")
+                    return {
+                        'start': None,
+                        'end': None,
+                        'words': [],
+                        'operation_status': 'failed'
+                    }
+
+            # Clean and normalize text for comparison
+            def clean_word(word):
+                return re.sub(r'[^\w\s]', '', word.lower().strip())
+
+            # Get first two words from segment
+            segment_first_words = [clean_word(word) for word in segment_text.split()[:2] if clean_word(word)]
+            timing_first_words = [clean_word(timing['word']) for timing in word_timings[:2]]
+
+            # Check if first two words match, ignoring case
+            words_match = (len(segment_first_words) >= 2 and 
+                          len(timing_first_words) >= 2 and 
+                          segment_first_words[0].lower() == timing_first_words[0].lower() and 
+                          segment_first_words[1].lower() == timing_first_words[1].lower())
+
+            # Split and clean segment text
+            segment_words = [clean_word(word) for word in segment_text.split() if clean_word(word)]
             
-            # Process only the words in this segment
-            for i, word in enumerate(segment_words):
-                if i < len(word_timings):
-                    timing = word_timings[i]
-                    segment_word_timings.append(timing)
-                    
-                    # Set start time if not set
-                    if segment_start is None:
-                        segment_start = float(timing['start'])
-                    
-                    # Update end time
-                    segment_end = float(timing['end'])
+            # Clean timing words and create lookup
+            timing_lookup = []
+            for timing in word_timings:
+                cleaned_word = clean_word(timing['word'])
+                if cleaned_word:  # Only add non-empty words
+                    timing_lookup.append({
+                        'word': cleaned_word,
+                        'start': float(timing['start']),
+                        'end': float(timing['end']),
+                        'original': timing
+                    })
+
+            # Find best matching sequence using sliding window
+            best_start_idx = -1
+            best_match_count = 0
+            best_match_ratio = 0
+            required_match_ratio = 0.6  # Lowered to 60% for more flexibility
+            window_size = min(30, len(segment_words))  # Look at smaller windows
+
+            # Debug info
+            print(f"\nTrying to match segment: {segment_text[:100]}...")
             
+            # Try matching with different window sizes
+            for window_start in range(0, len(segment_words), window_size):
+                window_words = segment_words[window_start:window_start + window_size]
+                
+                for i in range(len(timing_lookup) - len(window_words) + 1):
+                    match_count = 0
+                    total_words = len(window_words)
+                    
+                    for j, seg_word in enumerate(window_words):
+                        if i + j >= len(timing_lookup):
+                            break
+                            
+                        timing_word = timing_lookup[i + j]['word']
+                        
+                        # Multiple matching strategies
+                        if (seg_word == timing_word or  # Exact match
+                            (len(seg_word) > 3 and len(timing_word) > 3 and  # Partial match for longer words
+                             (seg_word.startswith(timing_word) or 
+                              timing_word.startswith(seg_word))) or
+                            (seg_word in timing_word or timing_word in seg_word)):  # Substring match
+                            match_count += 1
+                            
+                    match_ratio = match_count / total_words
+                    if match_ratio > best_match_ratio:
+                        best_match_ratio = match_ratio
+                        best_start_idx = i
+                        best_match_count = match_count
+                        
+                        # Debug successful matches
+                        if match_ratio > required_match_ratio:
+                            print(f"Found match at position {i} with ratio {match_ratio:.2f}")
+                            print(f"Matched words: {match_count}/{total_words}")
+
+            if best_start_idx == -1 or best_match_ratio <= required_match_ratio:
+                print(f"Warning: Could not find timing match for segment. Best ratio: {best_match_ratio:.2f}")
+                return {
+                    'start': None,
+                    'end': None,
+                    'words': [],
+                    'operation_status': 'failed'
+                }
+
+            # Get timing information for the matched sequence
+            end_idx = min(best_start_idx + len(segment_words), len(timing_lookup))
+            matched_timings = timing_lookup[best_start_idx:end_idx]
+            segment_word_timings = [t['original'] for t in matched_timings]
+
             return {
-                'start': segment_start,
-                'end': segment_end,
-                'words': segment_word_timings
+                'start': matched_timings[0]['start'],
+                'end': matched_timings[-1]['end'],
+                'words': segment_word_timings,
+                'operation_status': 'success' if words_match else 'failed'
             }
+
         except Exception as e:
             print(f"Error getting segment timings: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
             return {
                 'start': None,
                 'end': None,
-                'words': []
+                'words': [],
+                'operation_status': 'failed'
             }
 
     def process_transcript(self, transcript_text, word_timings=None):
@@ -452,7 +544,8 @@ class SmartTextProcessor:
                 return {
                     "segments": [{
                         "title": "Complete Content",
-                        "content": text
+                        "content": text,
+                        "keywords": self.extract_keywords(text)
                     }]
                 }
 
@@ -461,12 +554,18 @@ class SmartTextProcessor:
             
             try:
                 segments_data = json.loads(response_text)
+                
+                # Add keywords to each segment
+                for segment in segments_data['segments']:
+                    segment['keywords'] = self.extract_keywords(segment['content'])
+                
             except json.JSONDecodeError as e:
                 print(f"Error parsing JSON response: {e}")
                 return {
                     "segments": [{
                         "title": "Complete Content",
-                        "content": text
+                        "content": text,
+                        "keywords": self.extract_keywords(text)
                     }]
                 }
             
@@ -476,7 +575,8 @@ class SmartTextProcessor:
                 return {
                     "segments": [{
                         "title": "Complete Content",
-                        "content": text
+                        "content": text,
+                        "keywords": self.extract_keywords(text)
                     }]
                 }
             
@@ -487,7 +587,8 @@ class SmartTextProcessor:
             return {
                 "segments": [{
                     "title": "Complete Content",
-                    "content": text
+                    "content": text,
+                    "keywords": self.extract_keywords(text)
                 }]
             }
 
