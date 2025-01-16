@@ -75,8 +75,8 @@ class ContentProcessor:
             print(f"Error saving processed content: {e}")
     
     def extract_and_transcribe(self, video_name):
-        """Extract audio and convert to text"""
-        video_path = f"{video_name}.mp4"  # Assuming MP4 format
+        """Extract audio and convert to text with timing information"""
+        video_path = f"{video_name}.mp4"
         
         if not os.path.exists(video_path):
             print(f"Error: Video file not found: {video_path}")
@@ -89,22 +89,31 @@ class ContentProcessor:
             print("Failed to extract audio from video")
             return None
             
-        print(f"Audio extracted successfully to: {audio_path}")
-        print("Converting speech to text...")
+        print("Converting speech to text with timing information...")
+        result = self.speech_to_text.convert_to_text(audio_path)
         
-        text = self.speech_to_text.convert_to_text(audio_path)
-        
-        if text:
+        if result:
             # Save transcript
             transcript_path = self.get_transcript_path(video_name)
+            timing_path = os.path.join(self.transcripts_dir, f"{video_name}_timings.json")
+            
             try:
                 os.makedirs(os.path.dirname(transcript_path), exist_ok=True)
+                
+                # Save transcript text
                 with open(transcript_path, 'w', encoding='utf-8') as f:
-                    f.write(text)
+                    f.write(result['text'])
                 print(f"Transcript saved to: {transcript_path}")
-                return text
+                
+                # Save word timings
+                with open(timing_path, 'w', encoding='utf-8') as f:
+                    json.dump(result['word_timings'], f, indent=2)
+                print(f"Word timings saved to: {timing_path}")
+                
+                return result['text']
+                
             except Exception as e:
-                print(f"Error saving transcript: {e}")
+                print(f"Error saving transcript or timings: {e}")
                 return None
         else:
             print("Failed to convert speech to text")
@@ -117,6 +126,7 @@ class ContentProcessor:
             
             transcript_path = self.get_transcript_path(video_name)
             processed_path = self.get_processed_path(video_name)
+            timing_path = os.path.join('transcripts', f"{video_name}_timings.json")
             
             # Check if already processed
             if os.path.exists(processed_path):
@@ -137,21 +147,32 @@ class ContentProcessor:
                 transcript_text = self.extract_and_transcribe(video_name)
             
             if transcript_text:
-                # Process the transcript into shorts
+                # Process the transcript into segments
                 try:
                     # Ensure NLTK resources before processing
                     self.ensure_nltk_resources()
                     
-                    shorts = self.processor.create_shorts(transcript_text)
+                    # Read word timings if available
+                    word_timings = None
+                    if os.path.exists(timing_path):
+                        with open(timing_path, 'r', encoding='utf-8') as f:
+                            word_timings = json.load(f)
+                    
+                    # Use segment_by_theme instead of create_shorts
+                    segments = self.processor.segment_by_theme(transcript_text, word_timings)
+                    
+                    if not segments:
+                        print("Error: No segments were created")
+                        return None
                     
                     # Add metadata about the source
                     processed_content = {
                         'video_name': video_name,
-                        'shorts': shorts,
+                        'segments': segments['segments'],  # Note: segments now includes timing data
                         'metadata': {
-                            'total_shorts': len(shorts),
-                            'total_characters': sum(short['length'] for short in shorts),
-                            'average_sentiment': sum(short['sentiment'] for short in shorts) / len(shorts) if shorts else 0
+                            'total_segments': len(segments['segments']),
+                            'total_characters': sum(len(seg['content']) for seg in segments['segments']),
+                            'has_timing_data': word_timings is not None
                         }
                     }
                     
@@ -178,30 +199,26 @@ def main():
     # Your API key
     api_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZGVsNTBhbGk1MEBnbWFpbC5jb20iLCJpYXQiOjE3MzYxODcxMjR9.qXy0alEIV38TFlVQnS6JUYgEiayxu46F_CdZxf8Czy8"
     
-    # Initialize the content processor
     processor = ContentProcessor(api_key)
-    
-    # Example video name (without extension)
     video_name = "The True Meaning Of Life (Animated Cinematic)"
     
-    # Process the video
     result = processor.process_video(video_name)
     
     if result:
         print("\n=== Processing Results ===\n")
         print(f"Video: {result['video_name']}")
-        print(f"Total Shorts: {result['metadata']['total_shorts']}")
-        print(f"Total Characters: {result['metadata']['total_characters']}")
-        print(f"Average Sentiment: {result['metadata']['average_sentiment']:.2f}")
-        print("\n=== Generated Shorts ===\n")
+        print(f"Total Segments: {result['metadata']['total_segments']}")
+        print(f"Has Timing Data: {result['metadata']['has_timing_data']}")
+        print("\n=== Generated Segments ===\n")
         
-        for i, short in enumerate(result['shorts'], 1):
-            print(f"Short #{i}")
-            print(f"Title: {short['title']}")
-            print(f"Content: {short['content']}")
-            print(f"Length: {short['length']} characters")
-            print(f"Sentiment: {'Positive' if short['sentiment'] > 0 else 'Negative' if short['sentiment'] < 0 else 'Neutral'}")
-            print(f"Keywords: {', '.join(short['keywords'])}")
+        for i, segment in enumerate(result['segments'], 1):
+            print(f"Segment #{i}")
+            print(f"Title: {segment['title']}")
+            if 'start_time' in segment and 'end_time' in segment:
+                print(f"Time: {segment['start_time']:.2f}s - {segment['end_time']:.2f}s")
+            print(f"Content: {segment['content']}")
+            print(f"Length: {len(segment['content'])} characters")
+            print(f"Keywords: {', '.join(segment['keywords'])}")
             print("\n" + "="*50 + "\n")
     else:
         print("No content was processed")

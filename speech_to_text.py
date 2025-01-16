@@ -25,18 +25,14 @@ class SpeechToText:
     def convert_to_text(self, audio_path):
         """
         Convert audio file to text using Vosk speech recognition
-        :param audio_path: Path to input audio file
-        :return: Transcribed text
+        Returns both text and word timings
         """
         try:
-            # Check if file exists
             if not os.path.exists(audio_path):
                 raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
-            # Open the audio file
             wf = wave.open(audio_path, "rb")
             
-            # Check if audio format is supported
             if wf.getnchannels() != 1:
                 raise ValueError("Audio file must be mono")
             if wf.getsampwidth() != 2:
@@ -44,31 +40,47 @@ class SpeechToText:
             if wf.getcomptype() != "NONE":
                 raise ValueError("Audio file must be WAV format PCM16")
 
-            # Create recognizer
             recognizer = KaldiRecognizer(self.model, wf.getframerate())
-            recognizer.SetWords(True)
+            recognizer.SetWords(True)  # Enable word timing
 
-            # Process audio file
             full_text = []
+            word_timings = []
+            
             while True:
                 data = wf.readframes(4000)
                 if len(data) == 0:
                     break
                 if recognizer.AcceptWaveform(data):
                     result = json.loads(recognizer.Result())
+                    if 'result' in result:
+                        # Extract word timings
+                        for word in result['result']:
+                            word_timings.append({
+                                'word': word['word'],
+                                'start': word['start'],
+                                'end': word['end']
+                            })
                     if 'text' in result and result['text'].strip():
                         full_text.append(result['text'])
 
             # Get final result
             final_result = json.loads(recognizer.FinalResult())
+            if 'result' in final_result:
+                for word in final_result['result']:
+                    word_timings.append({
+                        'word': word['word'],
+                        'start': word['start'],
+                        'end': word['end']
+                    })
             if 'text' in final_result and final_result['text'].strip():
                 full_text.append(final_result['text'])
 
-            # Close audio file
             wf.close()
 
-            # Return combined text
-            return ' '.join(full_text)
+            return {
+                'text': ' '.join(full_text),
+                'word_timings': word_timings
+            }
 
         except Exception as e:
             print(f"Error converting speech to text: {str(e)}")
