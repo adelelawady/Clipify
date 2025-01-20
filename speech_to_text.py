@@ -1,87 +1,99 @@
-from vosk import Model, KaldiRecognizer
-import wave
-import json
+import whisper
+from typing import Optional, Dict, Any
 import os
 
 class SpeechToText:
-    def __init__(self, model_path="vosk-model-small-en-us"):
+    def __init__(self, model_size: str = "base"):
         """
-        Initialize speech to text converter
-        :param model_path: Path to Vosk model (will download if not exists)
+        Initialize the speech to text converter
+        
+        Args:
+            model_size: Size of the Whisper model to use ("tiny", "base", "small", "medium", "large")
         """
-        # Download model if it doesn't exist
-        if not os.path.exists(model_path):
-            print("Downloading Vosk model (this may take a while)...")
-            import wget
-            wget.download("https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip")
-            # Extract the model
-            import zipfile
-            with zipfile.ZipFile("vosk-model-small-en-us-0.15.zip", 'r') as zip_ref:
-                zip_ref.extractall(".")
-            os.rename("vosk-model-small-en-us-0.15", model_path)
+        try:
+            self.model = whisper.load_model(model_size)
+        except Exception as e:
+            print(f"Error loading Whisper model: {e}")
+            self.model = None
 
-        self.model = Model(model_path)
-
-    def convert_to_text(self, audio_path):
+    def convert_to_text(self, audio_path: str) -> Optional[Dict[str, Any]]:
         """
-        Convert audio file to text using Vosk speech recognition
-        Returns both text and word timings
+        Convert audio file to text with segment-level timing information
+        
+        Args:
+            audio_path: Path to the audio file
+            
+        Returns:
+            Dictionary containing:
+                - text: Full transcript text
+                - word_timings: List of segment timing information
         """
         try:
             if not os.path.exists(audio_path):
                 raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
-            wf = wave.open(audio_path, "rb")
-            
-            if wf.getnchannels() != 1:
-                raise ValueError("Audio file must be mono")
-            if wf.getsampwidth() != 2:
-                raise ValueError("Audio file must be WAV format PCM16")
-            if wf.getcomptype() != "NONE":
-                raise ValueError("Audio file must be WAV format PCM16")
+            if self.model is None:
+                raise RuntimeError("Whisper model not properly initialized")
 
-            recognizer = KaldiRecognizer(self.model, wf.getframerate())
-            recognizer.SetWords(True)  # Enable word timing
+            # Transcribe with timestamps
+            result = self.model.transcribe(
+                audio_path,
+                language="en",
+                word_timestamps=True
+            )
 
-            full_text = []
-            word_timings = []
-            
-            while True:
-                data = wf.readframes(4000)
-                if len(data) == 0:
-                    break
-                if recognizer.AcceptWaveform(data):
-                    result = json.loads(recognizer.Result())
-                    if 'result' in result:
-                        # Extract word timings
-                        for word in result['result']:
-                            word_timings.append({
-                                'word': word['word'],
-                                'start': word['start'],
-                                'end': word['end']
-                            })
-                    if 'text' in result and result['text'].strip():
-                        full_text.append(result['text'])
+            # Extract full text and segments
+            full_text = result["text"]
+            segments = []
 
-            # Get final result
-            final_result = json.loads(recognizer.FinalResult())
-            if 'result' in final_result:
-                for word in final_result['result']:
-                    word_timings.append({
-                        'word': word['word'],
-                        'start': word['start'],
-                        'end': word['end']
-                    })
-            if 'text' in final_result and final_result['text'].strip():
-                full_text.append(final_result['text'])
-
-            wf.close()
+            # Process segments
+            for segment in result["segments"]:
+                segments.append({
+                    'text': segment['text'],
+                    'start': segment['start'],
+                    'end': segment['end'],
+                    'words': segment.get('words', [])
+                })
 
             return {
-                'text': ' '.join(full_text),
-                'word_timings': word_timings
+                'text': full_text,
+                'word_timings': segments
             }
 
         except Exception as e:
-            print(f"Error converting speech to text: {str(e)}")
-            return None 
+            print(f"Error in speech to text conversion: {str(e)}")
+            return None
+
+    def process_large_file(self, audio_path: str, chunk_duration: int = 30) -> Optional[Dict[str, Any]]:
+        """
+        Process a large audio file by chunks
+        
+        Args:
+            audio_path: Path to the audio file
+            chunk_duration: Duration of each chunk in seconds
+            
+        Returns:
+            Combined transcription result
+        """
+        try:
+            result = self.convert_to_text(audio_path)
+            return result
+        except Exception as e:
+            print(f"Error processing large file: {str(e)}")
+            return None
+
+def main():
+    """Test the speech to text conversion"""
+    converter = SpeechToText(model_size="base")
+    result = converter.convert_to_text("test_audio.wav")
+    
+    if result:
+        print("Transcript:", result['text'])
+        print("\nSegments:")
+        for segment in result['word_timings'][:3]:  # Print first 3 segments
+            print(f"Text: {segment['text']}")
+            print(f"Time: {segment['start']:.2f}s - {segment['end']:.2f}s")
+            print("---")
+
+if __name__ == "__main__":
+    main() 

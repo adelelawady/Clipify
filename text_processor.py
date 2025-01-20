@@ -302,119 +302,95 @@ class SmartTextProcessor:
     def get_segment_timings(self, segment_text, word_timings, start_pos=0):
         """Extract timing information for a segment based on word timings"""
         try:
-            # Ensure word_timings is a list of dictionaries
-            if not isinstance(word_timings, list):
-                if isinstance(word_timings, dict) and 'word_timings' in word_timings:
-                    word_timings = word_timings['word_timings']
-                else:
-                    print("Error: Invalid word_timings format")
-                    return {
-                        'start': None,
-                        'end': None,
-                        'words': [],
-                        'operation_status': 'failed'
-                    }
+            # Ensure word_timings is a dict with word_timings list
+            if isinstance(word_timings, dict):
+                word_timings = word_timings.get('word_timings', [])
+            
+            if not word_timings:
+                print("Error: No word timings provided")
+                return {
+                    'start': 0,
+                    'end': 0,
+                    'words': [],
+                    'operation_status': 'failed'
+                }
 
             # Clean and normalize text for comparison
             def clean_word(word):
                 return re.sub(r'[^\w\s]', '', word.lower().strip())
 
-            # Get first two words from segment
-            segment_first_words = [clean_word(word) for word in segment_text.split()[:2] if clean_word(word)]
-            timing_first_words = [clean_word(timing['word']) for timing in word_timings[:2]]
-
-            # Check if first two words match, ignoring case
-            words_match = (len(segment_first_words) >= 2 and 
-                          len(timing_first_words) >= 2 and 
-                          segment_first_words[0].lower() == timing_first_words[0].lower() and 
-                          segment_first_words[1].lower() == timing_first_words[1].lower())
-
-            # Split and clean segment text
-            segment_words = [clean_word(word) for word in segment_text.split() if clean_word(word)]
+            # Get segment words
+            segment_words = segment_text.lower().split()
             
-            # Clean timing words and create lookup
-            timing_lookup = []
-            for timing in word_timings:
-                cleaned_word = clean_word(timing['word'])
-                if cleaned_word:  # Only add non-empty words
-                    timing_lookup.append({
-                        'word': cleaned_word,
-                        'start': float(timing['start']),
-                        'end': float(timing['end']),
-                        'original': timing
-                    })
-
-            # Find best matching sequence using sliding window
-            best_start_idx = -1
-            best_match_count = 0
-            best_match_ratio = 0
-            required_match_ratio = 0.6  # Lowered to 60% for more flexibility
-            window_size = min(30, len(segment_words))  # Look at smaller windows
-
-            # Debug info
-            print(f"\nTrying to match segment: {segment_text[:100]}...")
+            # Find the start of the segment in word timings
+            start_idx = -1
+            end_idx = -1
             
-            # Try matching with different window sizes
-            for window_start in range(0, len(segment_words), window_size):
-                window_words = segment_words[window_start:window_start + window_size]
-                
-                for i in range(len(timing_lookup) - len(window_words) + 1):
-                    match_count = 0
-                    total_words = len(window_words)
-                    
-                    for j, seg_word in enumerate(window_words):
-                        if i + j >= len(timing_lookup):
-                            break
-                            
-                        timing_word = timing_lookup[i + j]['word']
-                        
-                        # Multiple matching strategies
-                        if (seg_word == timing_word or  # Exact match
-                            (len(seg_word) > 3 and len(timing_word) > 3 and  # Partial match for longer words
-                             (seg_word.startswith(timing_word) or 
-                              timing_word.startswith(seg_word))) or
-                            (seg_word in timing_word or timing_word in seg_word)):  # Substring match
-                            match_count += 1
-                            
-                    match_ratio = match_count / total_words
-                    if match_ratio > best_match_ratio:
-                        best_match_ratio = match_ratio
-                        best_start_idx = i
-                        best_match_count = match_count
-                        
-                        # Debug successful matches
-                        if match_ratio > required_match_ratio:
-                            print(f"Found match at position {i} with ratio {match_ratio:.2f}")
-                            print(f"Matched words: {match_count}/{total_words}")
+            # Look for the first few words of the segment
+            search_words = segment_words[:3]  # Use first 3 words for better accuracy
+            search_text = ' '.join(search_words).lower()
+            
+            # Build timing text for comparison
+            timing_text = ''
+            for i, timing in enumerate(word_timings):
+                if 'text' in timing:  # Use 'text' instead of 'word'
+                    timing_text = ' '.join(t.get('text', '').lower() for t in word_timings[i:i+3])
+                    if search_text in timing_text:
+                        start_idx = i
+                        break
 
-            if best_start_idx == -1 or best_match_ratio <= required_match_ratio:
-                print(f"Warning: Could not find timing match for segment. Best ratio: {best_match_ratio:.2f}")
+            if start_idx == -1:
+                print(f"Warning: Could not find start of segment: {search_text}")
                 return {
-                    'start': None,
-                    'end': None,
+                    'start': 0,
+                    'end': 0,
                     'words': [],
                     'operation_status': 'failed'
                 }
 
-            # Get timing information for the matched sequence
-            end_idx = min(best_start_idx + len(segment_words), len(timing_lookup))
-            matched_timings = timing_lookup[best_start_idx:end_idx]
-            segment_word_timings = [t['original'] for t in matched_timings]
+            # Find the end of the segment
+            end_words = segment_words[-3:]  # Use last 3 words
+            end_text = ' '.join(end_words).lower()
+            
+            for i in range(start_idx, len(word_timings)):
+                timing_text = ' '.join(t.get('text', '').lower() for t in word_timings[i:i+3])
+                if end_text in timing_text:
+                    end_idx = i + 2  # Include the matched words
+                    break
 
-            return {
-                'start': matched_timings[0]['start'],
-                'end': matched_timings[-1]['end'],
-                'words': segment_word_timings,
-                'operation_status': 'success' if words_match else 'failed'
-            }
+            if end_idx == -1:
+                end_idx = start_idx + len(segment_words)  # Approximate if exact match not found
+            
+            # Get timing information
+            try:
+                start_time = float(word_timings[start_idx].get('start', 0))
+                end_time = float(word_timings[min(end_idx, len(word_timings)-1)].get('end', 0))
+                
+                # Ensure end time is after start time
+                if end_time <= start_time:
+                    end_time = start_time + 30  # Default to 30 seconds if timing is invalid
+                    
+                return {
+                    'start': start_time,
+                    'end': end_time,
+                    'words': word_timings[start_idx:end_idx+1],
+                    'operation_status': 'success'
+                }
+                
+            except Exception as e:
+                print(f"Error extracting timing values: {str(e)}")
+                return {
+                    'start': 0,
+                    'end': 0,
+                    'words': [],
+                    'operation_status': 'failed'
+                }
 
         except Exception as e:
-            print(f"Error getting segment timings: {str(e)}")
-            import traceback
-            print(traceback.format_exc())
+            print(f"Error in get_segment_timings: {str(e)}")
             return {
-                'start': None,
-                'end': None,
+                'start': 0,
+                'end': 0,
                 'words': [],
                 'operation_status': 'failed'
             }

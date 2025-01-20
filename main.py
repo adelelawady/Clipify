@@ -5,6 +5,8 @@ from text_processor import SmartTextProcessor
 from pathlib import Path
 from audio_extractor import AudioExtractor
 from speech_to_text import SpeechToText
+from video_cutter import VideoCutter
+from video_processor import VideoProcessor
 
 # Download required NLTK resources
 try:
@@ -199,13 +201,20 @@ class ContentProcessor:
             print(traceback.format_exc())
             return None
 
+def ensure_video_directories():
+    """Ensure video processing directories exist"""
+    directories = ['segmented_videos', 'processed_videos']
+    for directory in directories:
+        Path(directory).mkdir(parents=True, exist_ok=True)
+
 def main():
     # Your API key
     api_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZGVsNTBhbGk1MEBnbWFpbC5jb20iLCJpYXQiOjE3MzYxODcxMjR9.qXy0alEIV38TFlVQnS6JUYgEiayxu46F_CdZxf8Czy8"
     
     processor = ContentProcessor(api_key)
-    video_name = "The True Meaning Of Life (Animated Cinematic)"
+    video_name = "How Lust Destroys Your Life - Atlas (720p, h264).mp4"
     
+    # Process video content
     result = processor.process_video(video_name)
     
     if result:
@@ -213,18 +222,66 @@ def main():
         print(f"Video: {result['video_name']}")
         print(f"Total Segments: {result['metadata']['total_segments']}")
         print(f"Has Timing Data: {result['metadata']['has_timing_data']}")
-        print("\n=== Generated Segments ===\n")
+        
+        # Initialize video cutter and processor
+        video_cutter = VideoCutter()
+        video_processor = VideoProcessor()
+        
+        # Create shorts from processed segments
+        input_video = f"{video_name}.mp4"
+        
+        if not os.path.exists(input_video):
+            print(f"Error: Input video not found: {input_video}")
+            return
+            
+        print("\n=== Cutting Video Segments ===\n")
+        
+        # Create output directories
+        Path("segmented_videos").mkdir(exist_ok=True)
+        Path("processed_videos").mkdir(exist_ok=True)
         
         for i, segment in enumerate(result['segments'], 1):
-            print(f"Segment #{i}")
-            print(f"Title: {segment['title']}")
-            if 'start_time' in segment and 'end_time' in segment:
-                print(f"Time: {segment['start_time']:.2f}s - {segment['end_time']:.2f}s")
-            print(f"Content: {segment['content']}")
-            print(f"Length: {len(segment['content'])} characters")
-            print("\n" + "="*50 + "\n")
+            try:
+                if 'start_time' not in segment or 'end_time' not in segment:
+                    print(f"Warning: Segment {i} missing timing information")
+                    continue
+                    
+                # Clean the title for filename
+                clean_title = "".join(c for c in segment['title'] if c.isalnum() or c in (' ', '-', '_')).rstrip()
+                
+                # Cut the segment
+                output_segment = f"segmented_videos/segment_{i}_{clean_title}.mp4"
+                cut_result = video_cutter.cut_video(
+                    input_video,
+                    output_segment,
+                    float(segment['start_time']),
+                    float(segment['end_time'])
+                )
+                
+                if cut_result:
+                    print(f"Successfully cut segment #{i}: {segment['title']}")
+                    
+                    # Process the segment with captions
+                    output_processed = f"processed_videos/segment_{i}_{clean_title}_captioned.mp4"
+                    process_result = video_processor.process_video(
+                        input_video=output_segment,
+                        output_video=output_processed
+                    )
+                    
+                    if process_result:
+                        print(f"Successfully added captions to segment #{i}")
+                    else:
+                        print(f"Failed to add captions to segment #{i}")
+                else:
+                    print(f"Failed to cut segment #{i}")
+                    
+            except Exception as e:
+                print(f"Error processing segment #{i}: {str(e)}")
+                continue
     else:
         print("No content was processed")
+
+ensure_video_directories()
 
 if __name__ == "__main__":
     main() 

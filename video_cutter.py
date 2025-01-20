@@ -1,163 +1,142 @@
-import ffmpeg
-import json
+from moviepy.editor import VideoFileClip
 import os
 from pathlib import Path
+import logging
 
-class VideoSegmenter:
-    def __init__(self, processed_json_path, video_path):
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class VideoCutter:
+    def __init__(self):
+        """Initialize the video cutter"""
+        pass
+
+    def cut_video(self, input_video: str, output_video: str, start_time: float, end_time: float) -> str:
         """
-        Initialize the video segmenter
-        :param processed_json_path: Path to the processed JSON file with segment information
-        :param video_path: Path to the source video file
-        """
-        self.processed_data = self.load_json(processed_json_path)
-        self.video_path = video_path
-        self.output_dir = "segmented_videos"
-        self.target_duration = 60  # Target duration in seconds
-        self.padding = 1.0  # Padding in seconds for end of segments
+        Cut a segment from a video file
         
-        # Get video duration using ffprobe
-        try:
-            probe = ffmpeg.probe(video_path)
-            self.video_duration = float(probe['streams'][0]['duration'])
-        except Exception as e:
-            print(f"Error getting video duration: {e}")
-            self.video_duration = None
-        
-        os.makedirs(self.output_dir, exist_ok=True)
-
-    def load_json(self, json_path):
-        """Load and parse the processed JSON file"""
-        try:
-            with open(json_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"Error loading JSON file: {e}")
-            return None
-
-    def calculate_segment_timing(self, word_timings):
-        """
-        Calculate accurate segment timings from word timings with padding
-        :param word_timings: List of word timing dictionaries
-        :return: tuple of (start_time, end_time)
-        """
-        if not word_timings:
-            return None, None
+        Args:
+            input_video: Path to input video file
+            output_video: Path to save output video segment
+            start_time: Start time in seconds
+            end_time: End time in seconds
             
-        # Sort timings by start time to ensure correct order
-        sorted_timings = sorted(word_timings, key=lambda x: float(x['start']))
-        
-        # Get first and last word timings
-        start_time = float(sorted_timings[0]['start'])
-        end_time = float(sorted_timings[-1]['end']) + self.padding  # Add padding
-        
-        # Ensure we don't exceed video duration
-        if self.video_duration and end_time > self.video_duration:
-            end_time = self.video_duration
-        
-        return start_time, end_time
-
-    def cut_segment(self, segment_index):
-        """
-        Cut a specific segment from the video using ffmpeg
-        :param segment_index: Index of the segment to cut (0-based)
-        :return: Path to the cut video segment
+        Returns:
+            Path to the cut video segment
         """
         try:
-            # Validate segment index
-            if not self.processed_data or 'segments' not in self.processed_data:
-                raise ValueError("Invalid processed data format")
+            # Ensure input video exists
+            if not os.path.exists(input_video):
+                logger.error(f"Input video not found: {input_video}")
+                return None
 
-            segments = self.processed_data['segments']
-            if segment_index < 0 or segment_index >= len(segments):
-                raise ValueError(f"Invalid segment index: {segment_index}")
+            # Create output directory if it doesn't exist
+            output_dir = os.path.dirname(output_video)
+            if output_dir:
+                Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-            # Get segment information
-            segment = segments[segment_index]
-            if 'word_timings' not in segment:
-                raise ValueError("Segment missing word timing information")
+            logger.info(f"Cutting video segment from {start_time}s to {end_time}s")
+            logger.info(f"Input: {input_video}")
+            logger.info(f"Output: {output_video}")
 
-            # Calculate timing from word_timings
-            start_time, end_time = self.calculate_segment_timing(segment['word_timings'])
-            
-            if start_time is None or end_time is None:
-                raise ValueError("Could not determine segment timing from word timings")
-
-            # Ensure we don't exceed video duration
-            if self.video_duration and end_time > self.video_duration:
-                print(f"Warning: Segment {segment_index + 1} end time ({end_time:.2f}s) exceeds video duration ({self.video_duration:.2f}s)")
-                end_time = self.video_duration
-
-            duration = end_time - start_time
-
-            # Generate output filename
-            clean_title = "".join(c for c in segment['title'] if c.isalnum() or c.isspace()).rstrip()
-            output_filename = f"segment_{segment_index + 1}_{clean_title}.mp4"
-            output_path = os.path.join(self.output_dir, output_filename)
-
-            print(f"\nProcessing segment {segment_index + 1}: {clean_title}")
-            print(f"Start time: {start_time:.2f}s")
-            print(f"End time: {end_time:.2f}s")
-            print(f"Duration: {duration:.2f}s")
-
-            try:
-                # Cut the segment using ffmpeg
-                stream = ffmpeg.input(self.video_path, ss=start_time, t=duration)
-                stream = ffmpeg.output(stream, output_path, 
-                                    acodec='aac', 
-                                    vcodec='h264',
-                                    video_bitrate='2000k',
-                                    audio_bitrate='128k')
+            # Load video
+            with VideoFileClip(input_video) as video:
+                # Validate times
+                if start_time >= video.duration or end_time > video.duration:
+                    logger.error(f"Invalid time range: video duration is {video.duration}s")
+                    return None
                 
-                # Run ffmpeg command
-                ffmpeg.run(stream, overwrite_output=True, capture_stdout=True, capture_stderr=True)
-                
-                print(f"Segment saved to: {output_path}")
-                return output_path
+                if end_time <= start_time:
+                    logger.error(f"Invalid time range: end_time ({end_time}) must be greater than start_time ({start_time})")
+                    return None
 
-            except ffmpeg.Error as e:
-                print(f"FFmpeg error: {e.stderr.decode()}")
+                # Cut the segment
+                video_segment = video.subclip(start_time, end_time)
+                
+                # Write the segment
+                video_segment.write_videofile(
+                    output_video,
+                    codec='libx264',
+                    audio_codec='aac',
+                    temp_audiofile='temp-audio.m4a',
+                    remove_temp=True,
+                    logger=None  # Suppress moviepy progress bars
+                )
+
+            if os.path.exists(output_video):
+                logger.info(f"Successfully created video segment: {output_video}")
+                return output_video
+            else:
+                logger.error("Failed to create video segment")
                 return None
 
         except Exception as e:
-            print(f"Error cutting segment: {e}")
+            logger.error(f"Error cutting video: {str(e)}", exc_info=True)
             return None
 
-    def process_video(self):
-        """Process the entire video into segments"""
-        if not self.processed_data or 'segments' not in self.processed_data:
-            print("No segments found in processed data")
-            return []
-
-        # Cut each segment
-        output_paths = []
-        for i in range(len(self.processed_data['segments'])):
-            output_path = self.cut_segment(i)
-            if output_path:
-                output_paths.append(output_path)
-
-        return output_paths
+    def cut_segments(self, input_video: str, segments: list, output_dir: str) -> list:
+        """
+        Cut multiple segments from a video file
+        
+        Args:
+            input_video: Path to input video file
+            segments: List of dictionaries containing 'start_time' and 'end_time'
+            output_dir: Directory to save cut segments
+            
+        Returns:
+            List of paths to cut video segments
+        """
+        cut_segments = []
+        
+        # Ensure output directory exists
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        
+        for i, segment in enumerate(segments, 1):
+            try:
+                # Clean filename by removing invalid characters
+                clean_title = "".join(c for c in segment['title'] if c.isalnum() or c in (' ', '-', '_')).rstrip()
+                output_path = os.path.join(
+                    output_dir,
+                    f"segment_{i}_{clean_title}.mp4"
+                )
+                
+                # Get timing information
+                start_time = float(segment.get('start_time', 0))
+                end_time = float(segment.get('end_time', 0))
+                
+                logger.info(f"\nProcessing segment {i}: {clean_title}")
+                logger.info(f"Time range: {start_time:.2f}s - {end_time:.2f}s")
+                
+                result = self.cut_video(
+                    input_video=input_video,
+                    output_video=output_path,
+                    start_time=start_time,
+                    end_time=end_time
+                )
+                
+                if result:
+                    cut_segments.append(result)
+                    
+            except Exception as e:
+                logger.error(f"Error processing segment {i}: {str(e)}", exc_info=True)
+                continue
+                
+        return cut_segments
 
 def main():
-    # Example usage
-    video_name = "The True Meaning Of Life (Animated Cinematic)"
-    processed_json_path = Path("processed_content") / f"{video_name}_processed.json"
-    video_path = Path(f"{video_name}.mp4")
+    """Test the video cutter"""
+    cutter = VideoCutter()
     
-    if not video_path.exists():
-        print(f"Error: Video file not found: {video_path}")
-        return
-        
-    if not processed_json_path.exists():
-        print(f"Error: Processed JSON file not found: {processed_json_path}")
-        return
+    # Test cutting a single segment
+    result = cutter.cut_video(
+        input_video="test_video.mp4",
+        output_video="test_segment.mp4",
+        start_time=0,
+        end_time=10
+    )
     
-    # Create video segmenter
-    segmenter = VideoSegmenter(processed_json_path, video_path)
-    
-    # Process the video into segments
-    output_paths = segmenter.process_video()
-    print(f"\nCreated {len(output_paths)} segments successfully")
+    if result:
+        print(f"Successfully cut video segment: {result}")
 
 if __name__ == "__main__":
     main()
