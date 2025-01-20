@@ -212,7 +212,7 @@ def main():
     api_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZGVsNTBhbGk1MEBnbWFpbC5jb20iLCJpYXQiOjE3MzYxODcxMjR9.qXy0alEIV38TFlVQnS6JUYgEiayxu46F_CdZxf8Czy8"
     
     processor = ContentProcessor(api_key)
-    video_name = "How Lust Destroys Your Life - Atlas (720p, h264).mp4"
+    video_name = "How Lust Destroys Your Life - Atlas (720p, h264)"
     
     # Process video content
     result = processor.process_video(video_name)

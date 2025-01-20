@@ -131,8 +131,8 @@ def main():
 
     # Process single video
     processor.process_video(
-        input_video="segmented_videos/segment_1_The Inevitability of Death.mp4",
-        output_video="processed_videos/segment_1_The Inevitability of Death_captioned.mp4"
+        input_video="segment_10_Youre Not Alone The Struggle and the Hope.mp4",
+        output_video="segment_10_Youre Not Alone The Struggle and the Hope_captioned.mp4"
     )
 
 if __name__ == "__main__":
