@@ -68,12 +68,14 @@ def process_video_with_custom_settings():
                     conversion_result = video_converter.convert_to_mobile(
                         output_segment,
                         mobile_segment,
-                        target_ratio="6:19"
+                        target_ratio="9:16"
                     )
                     
                     if conversion_result:
                         print(f"Successfully converted segment #{i} to mobile format")
                         
+                        print(f"Processing segment #{i} with captions...")
+
                         # Process the mobile segment with captions
                         output_processed = f"processed_videos/segment_{i}_{clean_title}_captioned.mp4"
                         process_result = video_processor.process_video(

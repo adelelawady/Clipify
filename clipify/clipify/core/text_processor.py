@@ -11,13 +11,11 @@ import json
 try:
     nltk.download('punkt', quiet=True)
     nltk.download('stopwords', quiet=True)
-except Exception as e:
-    print(f"Warning: Error downloading NLTK resources: {e}")
+except:
+    pass
 
 class SmartTextProcessor:
     def __init__(self, api_key):
-        self.api_key = api_key
-        self.WORDS_PER_MINUTE = 150
         self.url = "https://api.hyperbolic.xyz/v1/chat/completions"
         self.headers = {
             "Content-Type": "application/json",
@@ -26,6 +24,7 @@ class SmartTextProcessor:
         self.cache = {}
         
         # Constants for chunk sizing
+        self.WORDS_PER_MINUTE = 150  # Average speaking rate
         self.TARGET_CHUNK_SIZE = self.WORDS_PER_MINUTE  # Words per chunk (1 minute)
         self.MAX_CHUNK_SIZE = int(self.TARGET_CHUNK_SIZE * 1.2)  # Allow 20% overflow
         self.MIN_CHUNK_SIZE = int(self.TARGET_CHUNK_SIZE * 0.8)  # Allow 20% underflow
@@ -115,68 +114,152 @@ class SmartTextProcessor:
         return len(text.split())
     
     def create_shorts(self, text):
-        """
-        Process text into social media-friendly segments
+        """Create approximately one-minute chunks of content using AI assistance"""
+        # Initial split into sentences
+        sentences = sent_tokenize(text)
         
-        Args:
-            text (str): Input text to process
-            
-        Returns:
-            list: List of segment dictionaries
-        """
-        segments = []
-        sentences = nltk.sent_tokenize(text)
+        shorts = []
+        current_chunk = []
+        current_word_count = 0
         
-        # Process text in chunks
-        chunk_size = 5  # sentences per chunk
-        for i in range(0, len(sentences), chunk_size):
-            chunk_sentences = sentences[i:i + chunk_size]
-            chunk_text = " ".join(chunk_sentences)
+        for sentence in sentences:
+            sentence_word_count = self.count_words(sentence)
             
-            # Generate optimized content using AI
+            # If adding this sentence would exceed max chunk size and we have enough words
+            if (current_word_count + sentence_word_count > self.MAX_CHUNK_SIZE and 
+                current_word_count >= self.MIN_CHUNK_SIZE):
+                
+                # Create short from current chunk
+                chunk_text = " ".join(current_chunk)
+                
+                # Use AI to optimize the chunk
+                prompt = f"""
+                Please optimize this text into a perfect one-minute short video script:
+                
+                Original text: {chunk_text}
+                
+                Requirements:
+                1. Keep the main message and key points
+                2. Make it engaging and natural to speak
+                3. Aim for ~150 words (one minute of speech)
+                4. Maintain coherent flow
+                5. Start and end with strong hooks
+                6. Keep it self-contained (make sense on its own)
+                
+                Return only the optimized script, no explanations.
+                """
+                print(prompt)
+                response = self.get_ai_response(prompt)
+                try:
+                    optimized_text = response['choices'][0]['message']['content'].strip()
+                except:
+                    optimized_text = chunk_text
+                
+                # Generate title using another AI call
+                title_prompt = f"""
+                Create a catchy, engaging social media title for this one-minute video:
+                
+                Content: {optimized_text}
+                
+                Requirements:
+                1. Maximum 60 characters
+                2. Include emojis if appropriate
+                3. Make it clickable but not clickbait
+                4. Capture the main value proposition
+                
+                Return only the title, no explanations.
+                """
+                
+                title_response = self.get_ai_response(title_prompt)
+                try:
+                    title = title_response['choices'][0]['message']['content'].strip()
+                except:
+                    title = self.generate_fallback_title(self.extract_keywords(optimized_text))
+                
+                # Calculate metrics for the optimized text
+                word_count = self.count_words(optimized_text)
+                
+                shorts.append({
+                    'title': title,
+                    'content': optimized_text,
+                    'length': len(optimized_text),
+                    'word_count': word_count,
+                    'estimated_duration': f"{word_count / self.WORDS_PER_MINUTE:.1f} minutes",
+                    'sentiment': self.analyze_sentiment(optimized_text),
+                    'keywords': self.extract_keywords(optimized_text),
+                    'hook': optimized_text.split('.')[0] + '.'  # First sentence as hook
+                })
+                
+                # Start new chunk
+                current_chunk = [sentence]
+                current_word_count = sentence_word_count
+            else:
+                # Add sentence to current chunk
+                current_chunk.append(sentence)
+                current_word_count += sentence_word_count
+        
+        # Handle the last chunk if it meets minimum size
+        if current_chunk and current_word_count >= self.MIN_CHUNK_SIZE:
+            chunk_text = " ".join(current_chunk)
+            
+            # Use AI to optimize the final chunk
             prompt = f"""
-            Optimize this content for social media (maintain key information):
-            {chunk_text}
+            Please optimize this text into a perfect one-minute short video script:
+            
+            Original text: {chunk_text}
             
             Requirements:
-            1. Keep it concise but engaging
-            2. Maintain key points
-            3. Use natural language
-            4. Make it shareable
+            1. Keep the main message and key points
+            2. Make it engaging and natural to speak
+            3. Aim for ~150 words (one minute of speech)
+            4. Maintain coherent flow
+            5. Start and end with strong hooks
+            6. Keep it self-contained (make sense on its own)
+            
+            Return only the optimized script, no explanations.
             """
             
             response = self.get_ai_response(prompt)
-            optimized_text = response['choices'][0]['message']['content'].strip()
+            try:
+                optimized_text = response['choices'][0]['message']['content'].strip()
+            except:
+                optimized_text = chunk_text
             
-            segments.append({
+            # Generate title for final chunk
+            title_prompt = f"""
+            Create a catchy, engaging social media title for this one-minute video:
+            
+            Content: {optimized_text}
+            
+            Requirements:
+            1. Maximum 60 characters
+            2. Include emojis if appropriate
+            3. Make it clickable but not clickbait
+            4. Capture the main value proposition
+            
+            Return only the title, no explanations.
+            """
+            
+            title_response = self.get_ai_response(title_prompt)
+            try:
+                title = title_response['choices'][0]['message']['content'].strip()
+            except:
+                title = self.generate_fallback_title(self.extract_keywords(optimized_text))
+            
+            word_count = self.count_words(optimized_text)
+            
+            shorts.append({
+                'title': title,
                 'content': optimized_text,
-                'title': self._generate_title(optimized_text),
-                'keywords': self._extract_keywords(optimized_text),
-                'sentiment': self._analyze_sentiment(optimized_text)
+                'length': len(optimized_text),
+                'word_count': word_count,
+                'estimated_duration': f"{word_count / self.WORDS_PER_MINUTE:.1f} minutes",
+                'sentiment': self.analyze_sentiment(optimized_text),
+                'keywords': self.extract_keywords(optimized_text),
+                'hook': optimized_text.split('.')[0] + '.'  # First sentence as hook
             })
-            
-        return segments
-
-    def _generate_title(self, text):
-        """Generate engaging title for segment"""
-        prompt = f"Create a catchy, engaging social media title (max 60 chars) for: {text[:200]}..."
-        response = self.get_ai_response(prompt)
-        return response['choices'][0]['message']['content'].strip()
-
-    def _extract_keywords(self, text):
-        """Extract key terms from text"""
-        words = nltk.word_tokenize(text.lower())
-        stop_words = set(nltk.corpus.stopwords.words('english'))
-        keywords = [word for word in words if word.isalnum() and word not in stop_words]
-        return list(set(keywords))[:5]
-
-    def _analyze_sentiment(self, text):
-        """Analyze text sentiment"""
-        blob = TextBlob(text)
-        return {
-            'polarity': blob.sentiment.polarity,
-            'subjectivity': blob.sentiment.subjectivity
-        }
+        
+        return shorts
 
     def segment_by_theme(self, text, word_timings=None):
         """Segment text by theme with timing information"""
@@ -335,8 +418,8 @@ class SmartTextProcessor:
                     'length': len(segment['content']),
                     'word_count': self.count_words(segment['content']),
                     'estimated_duration': f"{self.count_words(segment['content']) / self.WORDS_PER_MINUTE:.1f} minutes",
-                    'sentiment': segment.get('sentiment', self._analyze_sentiment(segment['content'])),
-                    'keywords': segment.get('keywords', self._extract_keywords(segment['content'])),
+                    'sentiment': segment.get('sentiment', self.analyze_sentiment(segment['content'])),
+                    'keywords': segment.get('keywords', self.extract_keywords(segment['content'])),
                     'start_time': segment.get('start_time'),
                     'end_time': segment.get('end_time'),
                     'word_timings': segment.get('word_timings', [])
@@ -352,8 +435,8 @@ class SmartTextProcessor:
                     'length': len(transcript_text),
                     'word_count': self.count_words(transcript_text),
                     'estimated_duration': f"{self.count_words(transcript_text) / self.WORDS_PER_MINUTE:.1f} minutes",
-                    'sentiment': self._analyze_sentiment(transcript_text),
-                    'keywords': self._extract_keywords(transcript_text),
+                    'sentiment': self.analyze_sentiment(transcript_text),
+                    'keywords': self.extract_keywords(transcript_text),
                     'start_time': None,
                     'end_time': None,
                     'word_timings': []
@@ -370,8 +453,8 @@ class SmartTextProcessor:
                 'length': len(transcript_text),
                 'word_count': self.count_words(transcript_text),
                 'estimated_duration': f"{self.count_words(transcript_text) / self.WORDS_PER_MINUTE:.1f} minutes",
-                'sentiment': self._analyze_sentiment(transcript_text),
-                'keywords': self._extract_keywords(transcript_text),
+                'sentiment': self.analyze_sentiment(transcript_text),
+                'keywords': self.extract_keywords(transcript_text),
                 'start_time': None,
                 'end_time': None,
                 'word_timings': []
@@ -399,7 +482,7 @@ class SmartTextProcessor:
             return hashtags.split()
         except:
             # Fallback to basic hashtags from keywords
-            keywords = self._extract_keywords(content)
+            keywords = self.extract_keywords(content)
             return [f"#{keyword.lower()}" for keyword in keywords[:max_tags]]
 
     def get_thematic_segments(self, text):
@@ -438,7 +521,7 @@ class SmartTextProcessor:
                     "segments": [{
                         "title": "Complete Content",
                         "content": text,
-                        "keywords": self._extract_keywords(text)
+                        "keywords": self.extract_keywords(text)
                     }]
                 }
 
@@ -450,7 +533,7 @@ class SmartTextProcessor:
                 
                 # Add keywords to each segment
                 for segment in segments_data['segments']:
-                    segment['keywords'] = self._extract_keywords(segment['content'])
+                    segment['keywords'] = self.extract_keywords(segment['content'])
                 
             except json.JSONDecodeError as e:
                 print(f"Error parsing JSON response: {e}")
@@ -458,7 +541,7 @@ class SmartTextProcessor:
                     "segments": [{
                         "title": "Complete Content",
                         "content": text,
-                        "keywords": self._extract_keywords(text)
+                        "keywords": self.extract_keywords(text)
                     }]
                 }
             
@@ -469,7 +552,7 @@ class SmartTextProcessor:
                     "segments": [{
                         "title": "Complete Content",
                         "content": text,
-                        "keywords": self._extract_keywords(text)
+                        "keywords": self.extract_keywords(text)
                     }]
                 }
             
@@ -481,7 +564,7 @@ class SmartTextProcessor:
                 "segments": [{
                     "title": "Complete Content",
                     "content": text,
-                    "keywords": self._extract_keywords(text)
+                    "keywords": self.extract_keywords(text)
                 }]
             }
 
