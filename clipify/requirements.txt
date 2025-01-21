@@ -1,0 +1,31 @@
+# Core dependencies
+numpy>=1.19.0
+moviepy>=1.0.3
+pydub>=0.25.1
+nltk>=3.6.0
+textblob>=0.15.3
+whisper>=1.0.0
+requests>=2.25.1
+
+# Video processing
+git+https://github.com/adelelawady/captacity.git#egg=captacity[local_whisper]  # Install from fork with local Whisper support
+ffmpeg-python>=0.2.0  # For video manipulation
+
+# Audio processing
+SpeechRecognition>=3.8.1  # For speech recognition
+vosk>=0.3.32  # For offline speech recognition
+
+# Text processing
+transformers>=4.5.0  # For text analysis
+torch>=1.8.0  # Required for transformers
+torchaudio>=0.8.0  # Required for audio processing
+
+# Utility packages
+tqdm>=4.60.0  # For progress bars
+python-dotenv>=0.17.0  # For environment variables
+typing-extensions>=3.7.4  # For type hints
+pathlib>=1.0.1  # For file path handling
+
+# Optional but recommended
+opencv-python>=4.5.0  # For additional video processing capabilities
+scipy>=1.6.0  # For scientific computing 
