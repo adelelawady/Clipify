@@ -65,7 +65,9 @@ class ContentProcessor:
     
     def get_processed_path(self, video_name):
         """Get the path for processed content file"""
-        return os.path.join(self.processed_dir, f"{video_name}_processed.json")
+        # Remove any directory part and extension from video_name
+        base_name = Path(video_name).stem
+        return os.path.join(self.processed_dir, f"{base_name}_processed.json")
     
     def read_transcript(self, transcript_path):
         """Read transcript from file"""
@@ -86,10 +88,9 @@ class ContentProcessor:
         except Exception as e:
             print(f"Error saving processed content: {e}")
     
-    def extract_and_transcribe(self, video_name):
+    def extract_and_transcribe(self, video_path):
         """Extract audio and convert to text with timing information"""
-        video_path = f"{video_name}.mp4"
-        
+        # Use the full video path directly
         if not os.path.exists(video_path):
             print(f"Error: Video file not found: {video_path}")
             return None
@@ -105,7 +106,8 @@ class ContentProcessor:
         result = self.speech_to_text.convert_to_text(audio_path)
         
         if result:
-            # Save transcript
+            # Use video name without directory for saving transcript
+            video_name = Path(video_path).stem
             transcript_path = self.get_transcript_path(video_name)
             timing_path = os.path.join(self.transcripts_dir, f"{video_name}_timings.json")
             
@@ -135,10 +137,13 @@ class ContentProcessor:
             print("Failed to convert speech to text")
             return None
     
-    def process_video(self, video_name):
+    def process_video(self, video_path):
         """Process video content, checking for existing files"""
         try:
             self.ensure_directories()
+            
+            # Get base name without directory and extension
+            video_name = Path(video_path).stem
             
             transcript_path = self.get_transcript_path(video_name)
             processed_path = self.get_processed_path(video_name)
@@ -160,7 +165,8 @@ class ContentProcessor:
             else:
                 print(f"No transcript found for {video_name}")
                 print("Attempting to create transcript from video...")
-                transcript_text = self.extract_and_transcribe(video_name)
+                # Pass the full video path for transcription
+                transcript_text = self.extract_and_transcribe(video_path)
             
             if transcript_text:
                 # Process the transcript into segments

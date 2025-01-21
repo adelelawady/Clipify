@@ -13,7 +13,7 @@ def process_video_with_custom_settings():
     api_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZGVsNTBhbGk1MEBnbWFpbC5jb20iLCJpYXQiOjE3MzYxODcxMjR9.qXy0alEIV38TFlVQnS6JUYgEiayxu46F_CdZxf8Czy8"
     
     processor = ContentProcessor(api_key)
-    video_name = "test_video"
+    video_name = "test_video.mp4"
         
     # Process video content
     result = processor.process_video(video_name)
@@ -29,7 +29,7 @@ def process_video_with_custom_settings():
         video_converter = VideoConverter()
         
         # Create shorts from processed segments
-        input_video = f"{video_name}.mp4"
+        input_video = video_name
         
         if not os.path.exists(input_video):
             print(f"Error: Input video not found: {input_video}")
