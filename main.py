@@ -1,13 +1,13 @@
 import os
 import json
 import nltk
-from .text_processor import SmartTextProcessor
+from text_processor import SmartTextProcessor
 from pathlib import Path
-from ..audio.extractor import AudioExtractor
-from ..audio.speech import SpeechToText
-from ..video.cutter import VideoCutter
-from ..video.processor import VideoProcessor
-from ..video.converter import VideoConverter
+from audio_extractor import AudioExtractor
+from speech_to_text import SpeechToText
+from video_cutter import VideoCutter
+from video_processor import VideoProcessor
+from video_converter import VideoConverter
 
 # Download required NLTK resources
 try:
@@ -19,24 +19,15 @@ except Exception as e:
     print(f"Warning: Error downloading NLTK resources: {e}")
 
 class ContentProcessor:
-    def __init__(self, api_key=None):
-        self.api_key = api_key or os.getenv("CLIPIFY_API_KEY")
-        if not self.api_key:
-            raise ValueError("API key is required. Set it via constructor or CLIPIFY_API_KEY environment variable")
-        
-        # Initialize components
-        self.processor = SmartTextProcessor(self.api_key)
-        self.video_processor = VideoProcessor()
-        self.video_converter = VideoConverter()
-        self.video_cutter = VideoCutter()
-        self.audio_extractor = AudioExtractor()
-        self.speech_to_text = SpeechToText()
-        
+    def __init__(self, api_key):
         # Ensure NLTK resources are downloaded
         self.ensure_nltk_resources()
         
+        self.processor = SmartTextProcessor(api_key)
         self.transcripts_dir = "transcripts"
         self.processed_dir = "processed_content"
+        self.audio_extractor = AudioExtractor()
+        self.speech_to_text = SpeechToText()
         
     def ensure_nltk_resources(self):
         """Ensure all required NLTK resources are available"""
@@ -213,7 +204,7 @@ class ContentProcessor:
 
 def ensure_video_directories():
     """Ensure video processing directories exist"""
-    directories = ['segmented_videos', 'processed_videos' , 'transcripts' , 'processed_content']
+    directories = ['segmented_videos', 'processed_videos']
     for directory in directories:
         Path(directory).mkdir(parents=True, exist_ok=True)
 
@@ -231,6 +222,7 @@ def main():
         print("\n=== Processing Results ===\n")
         print(f"Video: {result['video_name']}")
         print(f"Total Segments: {result['metadata']['total_segments']}")
+        print(f"Has Timing Data: {result['metadata']['has_timing_data']}")
         
         # Initialize video cutter, processor and converter
         video_cutter = VideoCutter()
