@@ -7,6 +7,7 @@ from audio_extractor import AudioExtractor
 from speech_to_text import SpeechToText
 from video_cutter import VideoCutter
 from video_processor import VideoProcessor
+from video_converter import VideoConverter
 
 # Download required NLTK resources
 try:
@@ -223,9 +224,10 @@ def main():
         print(f"Total Segments: {result['metadata']['total_segments']}")
         print(f"Has Timing Data: {result['metadata']['has_timing_data']}")
         
-        # Initialize video cutter and processor
+        # Initialize video cutter, processor and converter
         video_cutter = VideoCutter()
         video_processor = VideoProcessor()
+        video_converter = VideoConverter()
         
         # Create shorts from processed segments
         input_video = f"{video_name}.mp4"
@@ -234,11 +236,11 @@ def main():
             print(f"Error: Input video not found: {input_video}")
             return
             
-        print("\n=== Cutting Video Segments ===\n")
-        
         # Create output directories
         Path("segmented_videos").mkdir(exist_ok=True)
         Path("processed_videos").mkdir(exist_ok=True)
+        
+        print("\n=== Cutting Video Segments ===\n")
         
         for i, segment in enumerate(result['segments'], 1):
             try:
@@ -261,17 +263,31 @@ def main():
                 if cut_result:
                     print(f"Successfully cut segment #{i}: {segment['title']}")
                     
-                    # Process the segment with captions
-                    output_processed = f"processed_videos/segment_{i}_{clean_title}_captioned.mp4"
-                    process_result = video_processor.process_video(
-                        input_video=output_segment,
-                        output_video=output_processed
+                    # Convert the segment to mobile format
+                    print(f"Converting segment #{i} to mobile format...")
+                    mobile_segment = f"segmented_videos/segment_{i}_{clean_title}_mobile.mp4"
+                    conversion_result = video_converter.convert_to_mobile(
+                        output_segment,
+                        mobile_segment,
+                        target_ratio="6:19"
                     )
                     
-                    if process_result:
-                        print(f"Successfully added captions to segment #{i}")
+                    if conversion_result:
+                        print(f"Successfully converted segment #{i} to mobile format")
+                        
+                        # Process the mobile segment with captions
+                        output_processed = f"processed_videos/segment_{i}_{clean_title}_captioned.mp4"
+                        process_result = video_processor.process_video(
+                            input_video=mobile_segment,
+                            output_video=output_processed
+                        )
+                        
+                        if process_result:
+                            print(f"Successfully added captions to segment #{i}")
+                        else:
+                            print(f"Failed to add captions to segment #{i}")
                     else:
-                        print(f"Failed to add captions to segment #{i}")
+                        print(f"Failed to convert segment #{i} to mobile format")
                 else:
                     print(f"Failed to cut segment #{i}")
                     
