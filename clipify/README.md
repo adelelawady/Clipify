@@ -1,4 +1,5 @@
-# Video Content Processor
+
+# Clipify
 
 A powerful Python tool for processing video content into social media-friendly segments with automated transcription, captioning, and thematic segmentation.
 
@@ -29,55 +30,88 @@ A powerful Python tool for processing video content into social media-friendly s
 - FFmpeg installed and in PATH
 - NLTK resources
 - Required Python packages (see requirements.txt)
+- API key for content processing services
+
+# Clone the repository:
 
 ## Installation
 
-1. Clone the repository:
+### install from pip
+
+```bash
+pip install clipify
+```
+
+### install from source
+
 ```bash
 git clone https://github.com/adelelawady/Clipify.git
 cd Clipify
 ```
 
-2. Create and activate a virtual environment:
-```bash
-python -m venv myenv
-source myenv/bin/activate  # On Windows: myenv\Scripts\activate
-```
+# Install the dependencies:
 
-3. Install required packages:
 ```bash
 pip install -r requirements.txt
-```
-
-4. Download required NLTK resources:
-```python
-import nltk
-nltk.download('punkt')
-nltk.download('stopwords')
-nltk.download('averaged_perceptron_tagger')
 ```
 
 ## Usage
 
 1. Basic video processing:
+
 ```python
-from content_processor import ContentProcessor
-
-# Initialize processor with your API key
-processor = ContentProcessor(api_key="your_api_key")
-
-# Process a video
-result = processor.process_video("your_video_name")
+from clipify.core.clipify import Clipify
+    # Initialize Clipify with Hyperbolic or OpenAI or Anthropic AI and specific model
+    clipify = Clipify(
+        provider_name="hyperbolic",
+        api_key="api-key",
+        model="deepseek-ai/DeepSeek-V3",  # Specify model
+        convert_to_mobile=True,
+        add_captions=True,
+        mobile_ratio="9:16"
+    )
+    
+    # Process a video
+    result = clipify.process_video("path/to/video.mp4")
+    
+    if result:
+        print("\nProcessing Summary:")
+        print(f"Processed video: {result['video_path']}")
+        print(f"Created {len(result['segments'])} segments")
+        
+        for segment in result['segments']:
+            print(f"\nSegment #{segment['segment_number']}: {segment['title']}")
+            if 'cut_video' in segment:
+                print(f"Cut video: {segment['cut_video']}")
+            if 'mobile_video' in segment:
+                print(f"Mobile version: {segment['mobile_video']}")
+            if 'captioned_video' in segment:
+                print(f"Captioned version: {segment['captioned_video']}")
 ```
 
-2. Process video with custom segments:
-```python
-# Process video with specific segments
-video_processor = VideoProcessor()
-result = video_processor.process_video(
-    input_video="input.mp4",
-    output_video="output.mp4"
-)
+## Project Structure
+
+```
+clipify/
+├── clipify/
+│ ├── init.py
+│ ├── content_processor.py
+│ ├── video_processor.py
+│ └── utils/
+│ ├── audio.py
+│ ├── captions.py
+│ └── transcription.py
+├── tests/
+├── requirements.txt
+├── setup.py
+└── README.md
 ```
 
-## Project Structure 
+  
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
