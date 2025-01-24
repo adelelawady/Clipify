@@ -7,7 +7,7 @@ def main():
     # Initialize Clipify with Hyperbolic AI and specific model
     clipify = Clipify(
         provider_name="hyperbolic",
-        api_key="your-hyperbolic-api-key",
+        api_key="api-key",
         model="deepseek-ai/DeepSeek-V3",  # Specify model
         convert_to_mobile=True,
         add_captions=True,
@@ -15,7 +15,7 @@ def main():
     )
     
     # Process a video
-    result = clipify.process_video("path/to/your/video.mp4")
+    result = clipify.process_video("path/to/video.mp4")
     
     if result:
         print("\nProcessing Summary:")
@@ -56,20 +56,20 @@ def example_anthropic():
 
 def list_available_models():
     """Print available models for each provider"""
-    print("Available Models:")
+    print("Available Models: Hyperbolic AI, OpenAI, Anthropic")
     print("\nHyperbolic AI:")
     for model in HyperbolicAI.AVAILABLE_MODELS:
-        if model != "default":
+        if model != "default , or selected your own model":
             print(f"  - {model}")
     
     print("\nOpenAI:")
     for model in OpenAIProvider.AVAILABLE_MODELS:
-        if model != "default":
+        if model != "default , or selected your own model":
             print(f"  - {model}")
     
     print("\nAnthropic:")
     for model in AnthropicProvider.AVAILABLE_MODELS:
-        if model != "default":
+        if model != "default , or selected your own model":
             print(f"  - {model}")
 
 if __name__ == "__main__":
