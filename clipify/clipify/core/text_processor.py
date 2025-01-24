@@ -540,29 +540,7 @@ class SmartTextProcessor:
             }
 
 def main():
-    # Your API key
-    api_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZGVsNTBhbGk1MEBnbWFpbC5jb20iLCJpYXQiOjE3MzYxODcxMjR9.qXy0alEIV38TFlVQnS6JUYgEiayxu46F_CdZxf8Czy8"
-    
-    # Initialize the processor
-    processor = SmartTextProcessor(get_ai_provider("hyperbolic", api_key))
-    
-    # Example transcript text
-    transcript = """
-    [Your video transcript text here]
-    """
-    
-    # Process the transcript
-    segments = processor.process_transcript(transcript)
-    
-    # Print the results
-    print("\n=== Processed Video Segments ===\n")
-    for i, segment in enumerate(segments, 1):
-        print(f"Segment #{i}")
-        print(f"Title: {segment['title']}")
-        print(f"Content: {segment['content']}")
-        print(f"Duration: {segment['estimated_duration']}")
-        print(f"Keywords: {', '.join(segment['keywords'])}")
-        print("\n" + "="*50 + "\n")
+    pass
 
 if __name__ == "__main__":
     main() 

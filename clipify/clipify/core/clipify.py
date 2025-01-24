@@ -13,6 +13,7 @@ class Clipify:
         self,
         provider_name="hyperbolic",
         api_key=None,
+        model="default",
         convert_to_mobile=True,
         add_captions=True,
         mobile_ratio="9:16"
@@ -23,6 +24,7 @@ class Clipify:
         Args:
             provider_name: Name of AI provider ('hyperbolic', 'openai', or 'anthropic')
             api_key: API key for the chosen provider
+            model: Model name to use (provider-specific, defaults to provider's default model)
             convert_to_mobile: Whether to convert segments to mobile format
             add_captions: Whether to add captions to segments
             mobile_ratio: Aspect ratio for mobile conversion
@@ -42,7 +44,7 @@ class Clipify:
                 )
         
         # Initialize AI provider and processor
-        self.ai_provider = get_ai_provider(provider_name, api_key)
+        self.ai_provider = get_ai_provider(provider_name, api_key, model)
         self.processor = ContentProcessor(self.ai_provider)
         
         # Initialize video components only if needed

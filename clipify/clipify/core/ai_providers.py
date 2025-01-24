@@ -14,12 +14,19 @@ class AIProvider(ABC):
 class HyperbolicAI(AIProvider):
     """Hyperbolic AI provider implementation"""
     
-    def __init__(self, api_key):
+    AVAILABLE_MODELS = {
+        "deepseek-v3": "deepseek-ai/DeepSeek-V3",
+        "deepseek-v2": "deepseek-ai/DeepSeek-V2",
+        "default": "deepseek-ai/DeepSeek-V3"
+    }
+    
+    def __init__(self, api_key, model="default"):
         self.url = "https://api.hyperbolic.xyz/v1/chat/completions"
         self.headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}"
         }
+        #self.model = self.AVAILABLE_MODELS.get(model.lower(), self.AVAILABLE_MODELS["default"])
         self.cache = {}
 
     def get_response(self, prompt, retry_count=3):
@@ -36,7 +43,7 @@ class HyperbolicAI(AIProvider):
                             "content": prompt
                         }
                     ],
-                    "model": "deepseek-ai/DeepSeek-V3",
+                    "model": self.model,
                     "max_tokens": 5012,
                     "temperature": 0.7,
                     "top_p": 0.9
@@ -59,13 +66,21 @@ class HyperbolicAI(AIProvider):
 class OpenAIProvider(AIProvider):
     """OpenAI provider implementation"""
     
-    def __init__(self, api_key):
+    AVAILABLE_MODELS = {
+        "gpt-4": "gpt-4",
+        "gpt-3.5-turbo": "gpt-3.5-turbo",
+        "gpt-4-turbo": "gpt-4-turbo-preview",
+        "default": "gpt-4"
+    }
+    
+    def __init__(self, api_key, model="default"):
         try:
             import openai
             self.openai = openai
             self.openai.api_key = api_key
         except ImportError:
             raise ImportError("OpenAI package not installed. Install with: pip install openai")
+        #self.model = self.AVAILABLE_MODELS.get(model.lower(), self.AVAILABLE_MODELS["default"])
         self.cache = {}
 
     def get_response(self, prompt, retry_count=3):
@@ -76,7 +91,7 @@ class OpenAIProvider(AIProvider):
         for attempt in range(retry_count):
             try:
                 response = self.openai.ChatCompletion.create(
-                    model="gpt-4",  # or another model
+                    model=self.model,
                     messages=[
                         {"role": "user", "content": prompt}
                     ],
@@ -106,12 +121,20 @@ class OpenAIProvider(AIProvider):
 class AnthropicProvider(AIProvider):
     """Anthropic (Claude) provider implementation"""
     
-    def __init__(self, api_key):
+    AVAILABLE_MODELS = {
+        "claude-3-opus": "claude-3-opus-20240229",
+        "claude-3-sonnet": "claude-3-sonnet-20240229",
+        "claude-3-haiku": "claude-3-haiku-20240307",
+        "default": "claude-3-sonnet-20240229"
+    }
+    
+    def __init__(self, api_key, model="default"):
         try:
             import anthropic
             self.client = anthropic.Anthropic(api_key=api_key)
         except ImportError:
             raise ImportError("Anthropic package not installed. Install with: pip install anthropic")
+        #self.model = self.AVAILABLE_MODELS.get(model.lower(), self.AVAILABLE_MODELS["default"])
         self.cache = {}
 
     def get_response(self, prompt, retry_count=3):
@@ -122,7 +145,7 @@ class AnthropicProvider(AIProvider):
         for attempt in range(retry_count):
             try:
                 response = self.client.messages.create(
-                    model="claude-3-sonnet-20240229",
+                    model=self.model,
                     max_tokens=2048,
                     temperature=0.7,
                     messages=[
@@ -149,8 +172,15 @@ class AnthropicProvider(AIProvider):
                 
         return None
 
-def get_ai_provider(provider_name: str, api_key: str) -> AIProvider:
-    """Factory function to get AI provider instance"""
+def get_ai_provider(provider_name: str, api_key: str, model: str = "default") -> AIProvider:
+    """
+    Factory function to get AI provider instance
+    
+    Args:
+        provider_name: Name of the AI provider
+        api_key: API key for the provider
+        model: Model name to use (provider-specific)
+    """
     providers = {
         "hyperbolic": HyperbolicAI,
         "openai": OpenAIProvider,
@@ -161,4 +191,4 @@ def get_ai_provider(provider_name: str, api_key: str) -> AIProvider:
     if not provider_class:
         raise ValueError(f"Unknown AI provider: {provider_name}. Available providers: {', '.join(providers.keys())}")
     
-    return provider_class(api_key) 
+    return provider_class(api_key, model) 
