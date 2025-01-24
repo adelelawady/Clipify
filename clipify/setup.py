@@ -33,7 +33,7 @@ dependency_links = [
 
 setup(
     name="clipify",
-    version="0.4.0",
+    version="0.5.0",
     author="Adel Elawady",
     author_email="adel50ali50@gmail.com",
     description="A powerful tool for processing video content into social media-friendly segments",

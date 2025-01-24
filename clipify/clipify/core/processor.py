@@ -19,13 +19,15 @@ except Exception as e:
     print(f"Warning: Error downloading NLTK resources: {e}")
 
 class ContentProcessor:
-    def __init__(self, api_key=None):
-        self.api_key = api_key or os.getenv("CLIPIFY_API_KEY")
-        if not self.api_key:
-            raise ValueError("API key is required. Set it via constructor or CLIPIFY_API_KEY environment variable")
+    def __init__(self, ai_provider):
+        """
+        Initialize with an AI provider instance
         
+        Args:
+            ai_provider: Instance of AIProvider class
+        """
         # Initialize components
-        self.processor = SmartTextProcessor(self.api_key)
+        self.processor = SmartTextProcessor(ai_provider)
         self.video_processor = VideoProcessor()
         self.video_converter = VideoConverter()
         self.video_cutter = VideoCutter()

@@ -15,57 +15,28 @@ except:
     pass
 
 class SmartTextProcessor:
-    def __init__(self, api_key):
-        self.url = "https://api.hyperbolic.xyz/v1/chat/completions"
-        self.headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}"
-        }
-        self.cache = {}
+    def __init__(self, ai_provider):
+        """
+        Initialize with an AI provider instance
+        
+        Args:
+            ai_provider: Instance of AIProvider class
+        """
+        self.ai_provider = ai_provider
         
         # Constants for chunk sizing
-        self.WORDS_PER_MINUTE = 150  # Average speaking rate
-        self.TARGET_CHUNK_SIZE = self.WORDS_PER_MINUTE  # Words per chunk (1 minute)
-        self.MAX_CHUNK_SIZE = int(self.TARGET_CHUNK_SIZE * 1.2)  # Allow 20% overflow
-        self.MIN_CHUNK_SIZE = int(self.TARGET_CHUNK_SIZE * 0.8)  # Allow 20% underflow
+        self.WORDS_PER_MINUTE = 150
+        self.TARGET_CHUNK_SIZE = self.WORDS_PER_MINUTE
+        self.MAX_CHUNK_SIZE = int(self.TARGET_CHUNK_SIZE * 1.2)
+        self.MIN_CHUNK_SIZE = int(self.TARGET_CHUNK_SIZE * 0.8)
         
-        # Add new constants for thematic segmentation
-        self.MIN_SEGMENT_LENGTH = 50  # Minimum characters per segment
-        self.MAX_SEGMENT_LENGTH = 1000  # Maximum characters per segment
+        # Constants for thematic segmentation
+        self.MIN_SEGMENT_LENGTH = 50
+        self.MAX_SEGMENT_LENGTH = 1000
     
     def get_ai_response(self, prompt, retry_count=3):
-        """Get AI response with retry mechanism and caching"""
-        if prompt in self.cache:
-            return self.cache[prompt]
-            
-        for attempt in range(retry_count):
-            try:
-                data = {
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ],
-                    "model": "deepseek-ai/DeepSeek-V3",
-                    "max_tokens": 5012,
-                    "temperature": 0.7,  # Increased for more creative titles
-                    "top_p": 0.9
-                }
-                
-                response = requests.post(self.url, headers=self.headers, json=data)
-                result = response.json()
-                
-                if 'choices' in result:
-                    self.cache[prompt] = result
-                    return result
-                    
-            except Exception as e:
-                if attempt == retry_count - 1:
-                    raise e
-                time.sleep(1)  # Wait before retry
-                
-        return None
+        """Get AI response using the configured provider"""
+        return self.ai_provider.get_response(prompt, retry_count)
 
     def analyze_sentiment(self, text):
         """Analyze the sentiment of text to help with title generation"""
@@ -573,7 +544,7 @@ def main():
     api_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZGVsNTBhbGk1MEBnbWFpbC5jb20iLCJpYXQiOjE3MzYxODcxMjR9.qXy0alEIV38TFlVQnS6JUYgEiayxu46F_CdZxf8Czy8"
     
     # Initialize the processor
-    processor = SmartTextProcessor(api_key)
+    processor = SmartTextProcessor(get_ai_provider("hyperbolic", api_key))
     
     # Example transcript text
     transcript = """

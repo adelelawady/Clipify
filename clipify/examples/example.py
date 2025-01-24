@@ -1,111 +1,54 @@
-from clipify import (
-    ContentProcessor, 
-    VideoCutter,
-    VideoConverter,
-    VideoProcessor,
-    AudioExtractor
-)
-import os
-from pathlib import Path
+from clipify.core.clipify import Clipify
 
-def process_video_with_custom_settings():
-    # Initialize components
-    api_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZGVsNTBhbGk1MEBnbWFpbC5jb20iLCJpYXQiOjE3MzYxODcxMjR9.qXy0alEIV38TFlVQnS6JUYgEiayxu46F_CdZxf8Czy8"
+def main():
+    """Example usage of Clipify"""
     
-    processor = ContentProcessor(api_key)
-    video_name = "test_video.mp4"
-        
-    # Process video content
-    result = processor.process_video(video_name)
+    # Initialize Clipify with Hyperbolic AI and all options
+    clipify = Clipify(
+        provider_name="hyperbolic",
+        api_key="your-hyperbolic-api-key",
+        convert_to_mobile=True,
+        add_captions=True,
+        mobile_ratio="9:16"
+    )
+    
+    # Process a video
+    result = clipify.process_video("path/to/your/video.mp4")
     
     if result:
-        print("\n=== Processing Results ===\n")
-        print(f"Video: {result['video_name']}")
-        print(f"Total Segments: {result['metadata']['total_segments']}")
+        print("\nProcessing Summary:")
+        print(f"Processed video: {result['video_path']}")
+        print(f"Created {len(result['segments'])} segments")
         
-        # Initialize video cutter, processor and converter
-        video_cutter = VideoCutter()
-        video_processor = VideoProcessor()
-        video_converter = VideoConverter()
-        
-        # Create shorts from processed segments
-        input_video = video_name
-        
-        if not os.path.exists(input_video):
-            print(f"Error: Input video not found: {input_video}")
-            return
-            
-        # Create output directories
-        Path("segmented_videos").mkdir(exist_ok=True)
-        Path("processed_videos").mkdir(exist_ok=True)
-        
-        print("\n=== Cutting Video Segments ===\n")
-        
-        for i, segment in enumerate(result['segments'], 1):
-            try:
-                if 'start_time' not in segment or 'end_time' not in segment:
-                    print(f"Warning: Segment {i} missing timing information")
-                    continue
-                    
-                # Clean the title for filename
-                clean_title = "".join(c for c in segment['title'] if c.isalnum() or c in (' ', '-', '_')).rstrip()
-                
-                # Cut the segment
-                output_segment = f"segmented_videos/segment_{i}_{clean_title}.mp4"
-                cut_result = video_cutter.cut_video(
-                    input_video,
-                    output_segment,
-                    float(segment['start_time']),
-                    float(segment['end_time'])
-                )
-                
-                if cut_result:
-                    print(f"Successfully cut segment #{i}: {segment['title']}")
-                    
-                    # Convert the segment to mobile format
-                    print(f"Converting segment #{i} to mobile format...")
-                    mobile_segment = f"segmented_videos/segment_{i}_{clean_title}_mobile.mp4"
-                    conversion_result = video_converter.convert_to_mobile(
-                        output_segment,
-                        mobile_segment,
-                        target_ratio="9:16"
-                    )
-                    
-                    if conversion_result:
-                        print(f"Successfully converted segment #{i} to mobile format")
-                        
-                        print(f"Processing segment #{i} with captions...")
+        for segment in result['segments']:
+            print(f"\nSegment #{segment['segment_number']}: {segment['title']}")
+            if 'cut_video' in segment:
+                print(f"Cut video: {segment['cut_video']}")
+            if 'mobile_video' in segment:
+                print(f"Mobile version: {segment['mobile_video']}")
+            if 'captioned_video' in segment:
+                print(f"Captioned version: {segment['captioned_video']}")
 
-                        # Process the mobile segment with captions
-                        output_processed = f"processed_videos/segment_{i}_{clean_title}_captioned.mp4"
-                        process_result = video_processor.process_video(
-                            input_video=mobile_segment,
-                            output_video=output_processed
-                        )
-                        
-                        if process_result:
-                            print(f"Successfully added captions to segment #{i}")
-                        else:
-                            print(f"Failed to add captions to segment #{i}")
-                    else:
-                        print(f"Failed to convert segment #{i} to mobile format")
-                else:
-                    print(f"Failed to cut segment #{i}")
-                    
-            except Exception as e:
-                print(f"Error processing segment #{i}: {str(e)}")
-                continue
-    else:
-        print("No content was processed")
+def example_openai():
+    """Example using OpenAI with only cutting (no mobile conversion or captions)"""
+    clipify = Clipify(
+        provider_name="openai",
+        api_key="your-openai-api-key",
+        convert_to_mobile=False,
+        add_captions=False
+    )
+    return clipify.process_video("path/to/video.mp4")
 
-def ensure_video_directories():
-    """Ensure video processing directories exist"""
-    directories = ['segmented_videos', 'processed_videos', 'transcripts', 'processed_content']
-    for directory in directories:
-        Path(directory).mkdir(parents=True, exist_ok=True)
+def example_anthropic():
+    """Example using Anthropic with mobile conversion but no captions"""
+    clipify = Clipify(
+        provider_name="anthropic",
+        api_key="your-anthropic-api-key",
+        convert_to_mobile=True,
+        add_captions=False,
+        mobile_ratio="4:5"
+    )
+    return clipify.process_video("path/to/video.mp4")
 
 if __name__ == "__main__":
-    ensure_video_directories()
-    print("Starting video processing...")
-    process_video_with_custom_settings()
-    print("\nProcessing complete!") 
+    main() 
