@@ -26,7 +26,7 @@ class HyperbolicAI(AIProvider):
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}"
         }
-        #self.model = self.AVAILABLE_MODELS.get(model.lower(), self.AVAILABLE_MODELS["default"])
+        self.model = model
         self.cache = {}
 
     def get_response(self, prompt, retry_count=3):
@@ -45,7 +45,7 @@ class HyperbolicAI(AIProvider):
                     ],
                     "model": self.model,
                     "max_tokens": 5012,
-                    "temperature": 0.7,
+                    "temperature": 0.1,
                     "top_p": 0.9
                 }
                 
@@ -80,7 +80,7 @@ class OpenAIProvider(AIProvider):
             self.openai.api_key = api_key
         except ImportError:
             raise ImportError("OpenAI package not installed. Install with: pip install openai")
-        #self.model = self.AVAILABLE_MODELS.get(model.lower(), self.AVAILABLE_MODELS["default"])
+        self.model = model
         self.cache = {}
 
     def get_response(self, prompt, retry_count=3):
@@ -134,7 +134,7 @@ class AnthropicProvider(AIProvider):
             self.client = anthropic.Anthropic(api_key=api_key)
         except ImportError:
             raise ImportError("Anthropic package not installed. Install with: pip install anthropic")
-        #self.model = self.AVAILABLE_MODELS.get(model.lower(), self.AVAILABLE_MODELS["default"])
+        self.model = model
         self.cache = {}
 
     def get_response(self, prompt, retry_count=3):
