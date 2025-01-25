@@ -1,7 +1,23 @@
 
-# Clipify
+![svgviewer-output](https://github.com/user-attachments/assets/534e1369-e3ea-493c-a15d-f6aff9b175fe)
+
+
+[![Development Status](https://img.shields.io/badge/status-beta-yellow.svg)](https://github.com/adelelawady/clipify)
+[![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://github.com/adelelawady/clipify)
+
+[![PyPI version](https://img.shields.io/pypi/v/clipify.svg)](https://pypi.org/project/clipify/)
+[![Python versions](https://img.shields.io/pypi/pyversions/clipify.svg)](https://pypi.org/project/clipify/)
+[![License](https://img.shields.io/pypi/l/clipify.svg)](https://github.com/adelelawady/clipify/blob/main/LICENSE)
+[![Downloads](https://img.shields.io/pypi/dm/clipify.svg)](https://pypi.org/project/clipify/)
+[![GitHub stars](https://img.shields.io/github/stars/adelelawady/Clipify.svg)](https://github.com/adelelawady/Clipify/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/adelelawady/Clipify.svg)](https://github.com/adelelawady/Clipify/issues)
 
 A powerful Python tool for processing video content into social media-friendly segments with automated transcription, captioning, and thematic segmentation.
+
+
+
+
+
 
 ## Features
 
