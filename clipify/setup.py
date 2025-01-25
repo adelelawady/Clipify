@@ -26,14 +26,9 @@ requirements = [
     "scipy>=1.6.0",
 ]
 
-# Define dependency links for git repositories
-dependency_links = [
-    "git+https://github.com/adelelawady/captacity.git#egg=captacity"
-]
-
 setup(
     name="clipify",
-    version="0.6.0",
+    version="0.7.0",
     author="Adel Elawady",
     author_email="adel50ali50@gmail.com",
     description="A powerful tool for processing video content into social media-friendly segments",
@@ -48,5 +43,5 @@ setup(
     ],
     python_requires=">=3.8",
     install_requires=requirements,
-    dependency_links=dependency_links,
+    include_package_data=True,
 ) 
