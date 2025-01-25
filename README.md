@@ -1,6 +1,8 @@
 
-![svgviewer-output](https://github.com/user-attachments/assets/534e1369-e3ea-493c-a15d-f6aff9b175fe)
 
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/58aecd53-d720-4716-96f2-002beebb52b3" alt="Clipify Logo" width="100"/>
+</p>
 
 [![Development Status](https://img.shields.io/badge/status-beta-yellow.svg)](https://github.com/adelelawady/clipify)
 [![PyPI version](https://img.shields.io/pypi/v/clipify.svg)](https://pypi.org/project/clipify/)
@@ -32,6 +34,7 @@
 A powerful Python tool for processing video content into social media-friendly segments with automated transcription, captioning, and thematic segmentation.
 
 
+![Screenshot 2025-01-25 045729](https://github.com/user-attachments/assets/f6b9ff76-181b-4de8-b19a-78eff0a2c86a)
 
 
 
