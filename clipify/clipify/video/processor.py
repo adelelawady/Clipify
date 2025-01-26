@@ -13,7 +13,20 @@ class VideoProcessor:
                  line_count: int = 1,
                  padding: int = 50,
                  position: str = "bottom"):
-        """Initialize the video processor with caption styling options"""
+        """
+        Initialize the video processor with caption styling options
+
+        Args:
+            font_size (int): Size of the caption font (default: 60)
+            font_color (str): Color of the caption text (default: "white")
+            stroke_width (int): Width of the text outline (default: 2)
+            stroke_color (str): Color of the text outline (default: "black")
+            shadow_strength (float): Strength of the text shadow (0.0-1.0) (default: 0.8)
+            shadow_blur (float): Blur amount of the text shadow (0.0-1.0) (default: 0.08)
+            line_count (int): Maximum number of lines per caption (default: 1)
+            padding (int): Padding around the captions in pixels (default: 50)
+            position (str): Position of captions ("bottom", "top", or "center") (default: "bottom")
+        """
         self.font_size = font_size
         self.font_color = font_color
         self.stroke_width = stroke_width 

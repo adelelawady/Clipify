@@ -16,7 +16,8 @@ class Clipify:
         model="default",
         convert_to_mobile=True,
         add_captions=True,
-        mobile_ratio="9:16"
+        mobile_ratio="9:16",
+        caption_options=None
     ):
         """
         Initialize Clipify with processing options
@@ -28,6 +29,7 @@ class Clipify:
             convert_to_mobile: Whether to convert segments to mobile format
             add_captions: Whether to add captions to segments
             mobile_ratio: Aspect ratio for mobile conversion
+            caption_options: Dictionary of caption styling options (font_size, font_color, etc.)
         """
         # Store configuration
         self.convert_to_mobile = convert_to_mobile
@@ -49,7 +51,14 @@ class Clipify:
         
         # Initialize video components only if needed
         self.video_cutter = VideoCutter()
-        self.video_processor = VideoProcessor() if add_captions else None
+        
+        # Initialize VideoProcessor with custom caption options if provided
+        if add_captions:
+            caption_options = caption_options or {}
+            self.video_processor = VideoProcessor(**caption_options)
+        else:
+            self.video_processor = None
+        
         self.video_converter = VideoConverter() if convert_to_mobile else None
         
         # Ensure directories exist
