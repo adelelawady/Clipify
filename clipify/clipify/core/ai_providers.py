@@ -45,7 +45,7 @@ class HyperbolicAI(AIProvider):
                     ],
                     "model": self.model,
                     "max_tokens": 5012,
-                    "temperature": 0.1,
+                    "temperature": 0.7,
                     "top_p": 0.9
                 }
                 
