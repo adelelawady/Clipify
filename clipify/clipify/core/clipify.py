@@ -67,8 +67,8 @@ class Clipify:
     @staticmethod
     def ensure_directories():
         """Ensure necessary directories exist"""
-        directories = ['segmented_videos', 'processed_videos', 'transcripts', 'processed_content']
-        for directory in directories:
+        base_directories = ['segmented_videos', 'processed_videos', 'transcripts', 'processed_content']
+        for directory in base_directories:
             Path(directory).mkdir(parents=True, exist_ok=True)
     
     def process_video(self, video_path):
@@ -83,6 +83,19 @@ class Clipify:
         """
         if not os.path.exists(video_path):
             raise FileNotFoundError(f"Video file not found: {video_path}")
+        
+        # Get video name without extension for folder creation
+        video_name = Path(video_path).stem
+        
+        # Create video-specific directories
+        video_dirs = {
+            'segmented': Path('segmented_videos') / video_name,
+            'processed': Path('processed_videos') / video_name
+        }
+        
+        # Create directories
+        for dir_path in video_dirs.values():
+            dir_path.mkdir(parents=True, exist_ok=True)
         
         # Process video content
         result = self.processor.process_video(video_path)
@@ -113,7 +126,7 @@ class Clipify:
                 }
                 
                 # Cut the segment
-                output_segment = f"segmented_videos/segment_{i}_{clean_title}.mp4"
+                output_segment = str(video_dirs['segmented'] / f"segment_{i}_{clean_title}.mp4")
                 cut_result = self.video_cutter.cut_video(
                     video_path,
                     output_segment,
@@ -129,7 +142,7 @@ class Clipify:
                     # Convert to mobile if requested
                     if self.convert_to_mobile:
                         print(f"Converting segment #{i} to mobile format...")
-                        mobile_segment = f"segmented_videos/segment_{i}_{clean_title}_mobile.mp4"
+                        mobile_segment = str(video_dirs['segmented'] / f"segment_{i}_{clean_title}_mobile.mp4")
                         conversion_result = self.video_converter.convert_to_mobile(
                             output_segment,
                             mobile_segment,
@@ -147,7 +160,7 @@ class Clipify:
                     # Add captions if requested
                     if self.add_captions:
                         print(f"Processing segment #{i} with captions...")
-                        output_processed = f"processed_videos/segment_{i}_{clean_title}_captioned.mp4"
+                        output_processed = str(video_dirs['processed'] / f"segment_{i}_{clean_title}_captioned.mp4")
                         process_result = self.video_processor.process_video(
                             input_video=current_output,
                             output_video=output_processed
@@ -169,6 +182,11 @@ class Clipify:
         
         return {
             'video_path': video_path,
+            'video_name': video_name,
+            'output_directories': {
+                'segmented': str(video_dirs['segmented']),
+                'processed': str(video_dirs['processed'])
+            },
             'segments': processed_segments,
             'metadata': result['metadata']
         } 
