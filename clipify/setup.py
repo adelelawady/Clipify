@@ -13,8 +13,6 @@ requirements = [
     "whisper>=1.0.0",
     "requests>=2.25.1",
     "ffmpeg-python>=0.2.0",
-    "SpeechRecognition>=3.8.1",
-    "vosk>=0.3.32",
     "transformers>=4.5.0",
     "torch>=1.8.0",
     "torchaudio>=0.8.0",
@@ -24,6 +22,7 @@ requirements = [
     "pathlib>=1.0.1",
     "opencv-python>=4.5.0",
     "scipy>=1.6.0",
+    "captacity>=0.1.0",
 ]
 
 setup(
