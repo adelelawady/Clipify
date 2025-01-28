@@ -1,5 +1,5 @@
 import os
-import captacity
+from captacity_clipify import add_captions
 from typing import Optional, Dict, Any
 
 class VideoProcessor:
@@ -63,7 +63,7 @@ class VideoProcessor:
                 os.makedirs(output_dir)
 
             # Add captions to video using Captacity
-            captacity.add_captions(
+            captacity_clipify.add_captions(
                 video_file=input_video,
                 output_file=output_video,
                 
