@@ -80,8 +80,21 @@ class VideoCutter:
                 )
                 
                 # Get timing information
-                start_time = float(segment.get('start_time', 0))
-                end_time = float(segment.get('end_time', 0))
+                start_time = segment.get('start_time')
+                end_time = segment.get('end_time')
+                
+                # Skip segments without valid timing information
+                if start_time is None or end_time is None:
+                    print(f"Skipping segment {i}: {clean_title} - No valid timing information")
+                    continue
+                
+                # Convert to float and validate
+                start_time = float(start_time)
+                end_time = float(end_time)
+                
+                if start_time >= end_time:
+                    print(f"Skipping segment {i}: {clean_title} - Invalid time range")
+                    continue
                 
                 logger.info(f"\nProcessing segment {i}: {clean_title}")
                 logger.info(f"Time range: {start_time:.2f}s - {end_time:.2f}s")
