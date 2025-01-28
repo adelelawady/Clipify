@@ -6,7 +6,7 @@ nltk>=3.6.0
 textblob>=0.15.3
 whisper>=1.0.0
 requests>=2.25.1
-captacity[local_whisper]>=0.1.0
+captacity-clipify[local_whisper]>=0.1.0
 ffmpeg-python>=0.2.0  # For video manipulation
 
 

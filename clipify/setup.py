@@ -22,12 +22,12 @@ requirements = [
     "pathlib>=1.0.1",
     "opencv-python>=4.5.0",
     "scipy>=1.6.0",
-    "captacity>=0.1.0",
+    "captacity-clipify",
 ]
 
 setup(
     name="clipify",
-    version="0.9.0",
+    version="1.0.0",
     author="Adel Elawady",
     author_email="adel50ali50@gmail.com",
     description="A powerful tool for processing video content into social media-friendly segments",
