@@ -63,7 +63,7 @@ class VideoProcessor:
                 os.makedirs(output_dir)
 
             # Add captions to video using Captacity
-            captacity_clipify.add_captions(
+            add_captions(
                 video_file=input_video,
                 output_file=output_video,
                 

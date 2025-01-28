@@ -249,16 +249,16 @@ class SmartTextProcessor:
                     )
                     
                     # Update segment with timing information
-                    if segment_timings['start'] is not None:
+                    if segment_timings['start'] is not None and segment_timings['end'] is not None:
                         segment['start_time'] = segment_timings['start']
                         segment['end_time'] = segment_timings['end']
                         segment['word_timings'] = segment_timings['words']
-                        segment['operation_status'] = segment_timings['operation_status']
+                        segment['operation_status'] = 'success'
                     else:
                         print(f"Warning: Could not find timing for segment: {segment['title']}")
-                        # Add empty timing data to maintain structure
-                        segment['start_time'] = 0
-                        segment['end_time'] = 0
+                        # Set to None instead of 0 to indicate missing timing data
+                        segment['start_time'] = None
+                        segment['end_time'] = None
                         segment['word_timings'] = []
                         segment['operation_status'] = 'failed'
             
@@ -280,66 +280,84 @@ class SmartTextProcessor:
             if not word_timings:
                 print("Error: No word timings provided")
                 return {
-                    'start': 0,
-                    'end': 0,
+                    'start': None,
+                    'end': None,
                     'words': [],
                     'operation_status': 'failed'
                 }
 
             # Clean and normalize text for comparison
-            def clean_word(word):
-                return re.sub(r'[^\w\s]', '', word.lower().strip())
+            def clean_text(text):
+                # Remove punctuation and extra whitespace, convert to lowercase
+                return ' '.join(re.sub(r'[^\w\s]', '', text.lower()).split())
 
-            # Get segment words
-            segment_words = segment_text.lower().split()
+            # Get segment words and clean the text
+            segment_text_clean = clean_text(segment_text)
+            segment_words = segment_text_clean.split()
             
             # Find the start of the segment in word timings
             start_idx = -1
             end_idx = -1
             
             # Look for the first few words of the segment
-            search_words = segment_words[:3]  # Use first 3 words for better accuracy
-            search_text = ' '.join(search_words).lower()
+            search_words = segment_words[:min(5, len(segment_words))]  # Use up to first 5 words
+            search_text = ' '.join(search_words)
             
             # Build timing text for comparison
-            timing_text = ''
-            for i, timing in enumerate(word_timings):
-                if 'text' in timing:  # Use 'text' instead of 'word'
-                    timing_text = ' '.join(t.get('text', '').lower() for t in word_timings[i:i+3])
-                    if search_text in timing_text:
-                        start_idx = i
-                        break
+            for i in range(len(word_timings)):
+                # Build a window of text from current position
+                window_text = ' '.join(
+                    clean_text(t.get('text', '')) 
+                    for t in word_timings[i:i+len(search_words)]
+                )
+                
+                if clean_text(search_text) in clean_text(window_text):
+                    start_idx = i
+                    break
 
             if start_idx == -1:
                 print(f"Warning: Could not find start of segment: {search_text}")
                 return {
-                    'start': 0,
-                    'end': 0,
+                    'start': None,
+                    'end': None,
                     'words': [],
                     'operation_status': 'failed'
                 }
 
             # Find the end of the segment
-            end_words = segment_words[-3:]  # Use last 3 words
-            end_text = ' '.join(end_words).lower()
+            end_words = segment_words[-min(5, len(segment_words)):]  # Use up to last 5 words
+            end_text = ' '.join(end_words)
             
             for i in range(start_idx, len(word_timings)):
-                timing_text = ' '.join(t.get('text', '').lower() for t in word_timings[i:i+3])
-                if end_text in timing_text:
-                    end_idx = i + 2  # Include the matched words
+                # Build a window of text from current position
+                window_text = ' '.join(
+                    clean_text(t.get('text', '')) 
+                    for t in word_timings[i:i+len(end_words)]
+                )
+                
+                if clean_text(end_text) in clean_text(window_text):
+                    end_idx = i + len(end_words) - 1  # Include all matched words
                     break
 
-            if end_idx == -1:
-                end_idx = start_idx + len(segment_words)  # Approximate if exact match not found
+            if end_idx == -1 or end_idx <= start_idx:
+                # If we can't find the end, try to estimate it based on word count
+                estimated_words = len(segment_words)
+                end_idx = min(start_idx + estimated_words, len(word_timings) - 1)
             
             # Get timing information
             try:
                 start_time = float(word_timings[start_idx].get('start', 0))
                 end_time = float(word_timings[min(end_idx, len(word_timings)-1)].get('end', 0))
                 
-                # Ensure end time is after start time
-                if end_time <= start_time:
-                    end_time = start_time + 30  # Default to 30 seconds if timing is invalid
+                # Validate timing values
+                if start_time >= end_time or start_time < 0:
+                    print(f"Warning: Invalid timing values found: start={start_time}, end={end_time}")
+                    return {
+                        'start': None,
+                        'end': None,
+                        'words': [],
+                        'operation_status': 'failed'
+                    }
                     
                 return {
                     'start': start_time,
@@ -351,8 +369,8 @@ class SmartTextProcessor:
             except Exception as e:
                 print(f"Error extracting timing values: {str(e)}")
                 return {
-                    'start': 0,
-                    'end': 0,
+                    'start': None,
+                    'end': None,
                     'words': [],
                     'operation_status': 'failed'
                 }
@@ -360,8 +378,8 @@ class SmartTextProcessor:
         except Exception as e:
             print(f"Error in get_segment_timings: {str(e)}")
             return {
-                'start': 0,
-                'end': 0,
+                'start': None,
+                'end': None,
                 'words': [],
                 'operation_status': 'failed'
             }
