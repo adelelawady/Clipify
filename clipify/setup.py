@@ -27,7 +27,7 @@ requirements = [
 
 setup(
     name="clipify",
-    version="1.0.1",
+    version="1.2.0",
     author="Adel Elawady",
     author_email="adel50ali50@gmail.com",
     description="A powerful tool for processing video content into social media-friendly segments",

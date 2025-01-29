@@ -7,6 +7,7 @@ from clipify.video.converter import VideoConverter
 from clipify.video.processor import VideoProcessor
 from clipify.audio.extractor import AudioExtractor
 from clipify.audio.speech import SpeechToText
+from clipify.video.converterStretch import VideoConverterStretch
 
 __version__ = "0.1.0"
 
@@ -22,4 +23,5 @@ __all__ = [
     'VideoProcessor',
     'AudioExtractor',
     'SpeechToText',
+    'VideoConverterStretch',
 ] 
