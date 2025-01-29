@@ -16,7 +16,7 @@
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat)](https://makeapullrequest.com)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Documentation Status](https://img.shields.io/badge/docs-passing-brightgreen.svg)](https://github.com/adelelawady/Clipify#readme)
-[![Version](https://img.shields.io/badge/version-0.9.0-blue.svg)](https://github.com/adelelawady/Clipify)
+[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/adelelawady/Clipify)
 [![GitHub contributors](https://img.shields.io/github/contributors/adelelawady/Clipify.svg)](https://github.com/adelelawady/Clipify/graphs/contributors/)
 [![Open Source](https://badges.frapsoft.com/os/v1/open-source.svg?v=103)](https://opensource.org/)
 [![Ask Me Anything !](https://img.shields.io/badge/Ask%20me-anything-1abc9c.svg)](https://github.com/adelelawady/Clipify/issues)
