@@ -1,18 +1,7 @@
-import requests
 import re
-import nltk
-from nltk.tokenize import sent_tokenize
-from nltk.corpus import stopwords
 from textblob import TextBlob
-import time
 import json
 
-# Download required NLTK data
-try:
-    nltk.download('punkt', quiet=True)
-    nltk.download('stopwords', quiet=True)
-except:
-    pass
 
 class SmartTextProcessor:
     def __init__(self, ai_provider):
@@ -33,7 +22,16 @@ class SmartTextProcessor:
         # Constants for thematic segmentation
         self.MIN_SEGMENT_LENGTH = 50
         self.MAX_SEGMENT_LENGTH = 1000
-    
+        
+        # Common English stop words
+        self.stop_words = {
+            'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from', 
+            'has', 'he', 'in', 'is', 'it', 'its', 'of', 'on', 'that', 'the', 
+            'to', 'was', 'were', 'will', 'with', 'the', 'this', 'but', 'they',
+            'have', 'had', 'what', 'when', 'where', 'who', 'which', 'why',
+            'can', 'could', 'should', 'would', 'may', 'might', 'must', 'shall'
+        }
+
     def get_ai_response(self, prompt, retry_count=3):
         """Get AI response using the configured provider"""
         return self.ai_provider.get_response(prompt, retry_count)
@@ -44,37 +42,32 @@ class SmartTextProcessor:
         return blob.sentiment.polarity
 
     def extract_keywords(self, text):
-        """Extract important keywords from text"""
-        stop_words = set(stopwords.words('english'))
-        words = text.lower().split()
-        keywords = [word for word in words if word.isalnum() and word not in stop_words]
-        return list(set(keywords))[:5]  # Return top 5 unique keywords
-
-    def generate_smart_title(self, text):
-        """Generate a more contextual and engaging title"""
-        sentiment = self.analyze_sentiment(text)
-        keywords = self.extract_keywords(text)
+        """Extract important keywords from text """
+        # Convert to lowercase and split into words
+        words = re.findall(r'\b\w+\b', text.lower())
         
-        # Craft a more specific title prompt based on content analysis
-        prompt_elements = [
-            "Generate a catchy title that:",
-            "- Captures the main topic: " + ", ".join(keywords),
-            "- Matches the tone: " + ("positive" if sentiment > 0 else "negative" if sentiment < 0 else "neutral"),
-            "- Is attention-grabbing and social media friendly",
-            "- Is no longer than 60 characters",
-            f"For this text: {text[:200]}..."  # Send first 200 chars for context
+        # Filter out stop words and short words
+        keywords = [
+            word for word in words 
+            if word not in self.stop_words 
+            and len(word) > 2 
+            and word.isalnum()
         ]
         
-        title_prompt = "\n".join(prompt_elements)
-        title_response = self.get_ai_response(title_prompt)
+        # Count word frequencies
+        word_freq = {}
+        for word in keywords:
+            word_freq[word] = word_freq.get(word, 0) + 1
+            
+        # Sort by frequency and length
+        sorted_keywords = sorted(
+            word_freq.items(),
+            key=lambda x: (x[1], len(x[0])),
+            reverse=True
+        )
         
-        try:
-            title = title_response['choices'][0]['message']['content'].strip()
-            # Remove quotes if present
-            title = title.strip('"\'')
-            return title
-        except:
-            return self.generate_fallback_title(keywords)
+        # Return top 5 unique keywords
+        return [word for word, _ in sorted_keywords[:5]]
 
     def generate_fallback_title(self, keywords):
         """Generate a simple title from keywords if AI generation fails"""
@@ -84,154 +77,6 @@ class SmartTextProcessor:
         """Count words in text"""
         return len(text.split())
     
-    def create_shorts(self, text):
-        """Create approximately one-minute chunks of content using AI assistance"""
-        # Initial split into sentences
-        sentences = sent_tokenize(text)
-        
-        shorts = []
-        current_chunk = []
-        current_word_count = 0
-        
-        for sentence in sentences:
-            sentence_word_count = self.count_words(sentence)
-            
-            # If adding this sentence would exceed max chunk size and we have enough words
-            if (current_word_count + sentence_word_count > self.MAX_CHUNK_SIZE and 
-                current_word_count >= self.MIN_CHUNK_SIZE):
-                
-                # Create short from current chunk
-                chunk_text = " ".join(current_chunk)
-                
-                # Use AI to optimize the chunk
-                prompt = f"""
-                Please optimize this text into a perfect one-minute short video script:
-                
-                Original text: {chunk_text}
-                
-                Requirements:
-                1. Keep the main message and key points
-                2. Make it engaging and natural to speak
-                3. Aim for ~150 words (one minute of speech)
-                4. Maintain coherent flow
-                5. Start and end with strong hooks
-                6. Keep it self-contained (make sense on its own)
-                
-                Return only the optimized script, no explanations.
-                """
-                print(prompt)
-                response = self.get_ai_response(prompt)
-                try:
-                    optimized_text = response['choices'][0]['message']['content'].strip()
-                except:
-                    optimized_text = chunk_text
-                
-                # Generate title using another AI call
-                title_prompt = f"""
-                Create a catchy, engaging social media title for this one-minute video:
-                
-                Content: {optimized_text}
-                
-                Requirements:
-                1. Maximum 60 characters
-                2. Include emojis if appropriate
-                3. Make it clickable but not clickbait
-                4. Capture the main value proposition
-                
-                Return only the title, no explanations.
-                """
-                
-                title_response = self.get_ai_response(title_prompt)
-                try:
-                    title = title_response['choices'][0]['message']['content'].strip()
-                except:
-                    title = self.generate_fallback_title(self.extract_keywords(optimized_text))
-                
-                # Calculate metrics for the optimized text
-                word_count = self.count_words(optimized_text)
-                
-                shorts.append({
-                    'title': title,
-                    'content': optimized_text,
-                    'length': len(optimized_text),
-                    'word_count': word_count,
-                    'estimated_duration': f"{word_count / self.WORDS_PER_MINUTE:.1f} minutes",
-                    'sentiment': self.analyze_sentiment(optimized_text),
-                    'keywords': self.extract_keywords(optimized_text),
-                    'hook': optimized_text.split('.')[0] + '.'  # First sentence as hook
-                })
-                
-                # Start new chunk
-                current_chunk = [sentence]
-                current_word_count = sentence_word_count
-            else:
-                # Add sentence to current chunk
-                current_chunk.append(sentence)
-                current_word_count += sentence_word_count
-        
-        # Handle the last chunk if it meets minimum size
-        if current_chunk and current_word_count >= self.MIN_CHUNK_SIZE:
-            chunk_text = " ".join(current_chunk)
-            
-            # Use AI to optimize the final chunk
-            prompt = f"""
-            Please optimize this text into a perfect one-minute short video script:
-            
-            Original text: {chunk_text}
-            
-            Requirements:
-            1. Keep the main message and key points
-            2. Make it engaging and natural to speak
-            3. Aim for ~150 words (one minute of speech)
-            4. Maintain coherent flow
-            5. Start and end with strong hooks
-            6. Keep it self-contained (make sense on its own)
-            
-            Return only the optimized script, no explanations.
-            """
-            
-            response = self.get_ai_response(prompt)
-            try:
-                optimized_text = response['choices'][0]['message']['content'].strip()
-            except:
-                optimized_text = chunk_text
-            
-            # Generate title for final chunk
-            title_prompt = f"""
-            Create a catchy, engaging social media title for this one-minute video:
-            
-            Content: {optimized_text}
-            
-            Requirements:
-            1. Maximum 60 characters
-            2. Include emojis if appropriate
-            3. Make it clickable but not clickbait
-            4. Capture the main value proposition
-            
-            Return only the title, no explanations.
-            """
-            
-            title_response = self.get_ai_response(title_prompt)
-            try:
-                title = title_response['choices'][0]['message']['content'].strip()
-            except:
-                title = self.generate_fallback_title(self.extract_keywords(optimized_text))
-            
-            word_count = self.count_words(optimized_text)
-            
-            shorts.append({
-                'title': title,
-                'content': optimized_text,
-                'length': len(optimized_text),
-                'word_count': word_count,
-                'estimated_duration': f"{word_count / self.WORDS_PER_MINUTE:.1f} minutes",
-                'sentiment': self.analyze_sentiment(optimized_text),
-                'keywords': self.extract_keywords(optimized_text),
-                'hook': optimized_text.split('.')[0] + '.'  # First sentence as hook
-            })
-        
-        return shorts
-
     def segment_by_theme(self, text, word_timings=None):
         """Segment text by theme with timing information"""
         try:
@@ -286,95 +131,65 @@ class SmartTextProcessor:
                     'operation_status': 'failed'
                 }
 
-            # Clean and normalize text for comparison
-            def clean_text(text):
-                # Remove punctuation and extra whitespace, convert to lowercase
-                return ' '.join(re.sub(r'[^\w\s]', '', text.lower()).split())
-
-            # Get segment words and clean the text
-            segment_text_clean = clean_text(segment_text)
-            segment_words = segment_text_clean.split()
+            # Clean segment text for comparison
+            segment_words = segment_text.split()
+            matching_words = []
             
-            # Find the start of the segment in word timings
-            start_idx = -1
-            end_idx = -1
+            # Find the start position by looking for the first few words
+            start_sequence = ' '.join(segment_words[:3]).lower()  # Use first 3 words as anchor
             
-            # Look for the first few words of the segment
-            search_words = segment_words[:min(5, len(segment_words))]  # Use up to first 5 words
-            search_text = ' '.join(search_words)
-            
-            # Build timing text for comparison
+            # Find starting position in word_timings
+            start_idx = 0
             for i in range(len(word_timings)):
-                # Build a window of text from current position
-                window_text = ' '.join(
-                    clean_text(t.get('text', '')) 
-                    for t in word_timings[i:i+len(search_words)]
-                )
+                current_sequence = ' '.join(
+                    w['text'].strip().lower() 
+                    for w in word_timings[i:i+3]
+                ).strip('.,!?;:"\'')
                 
-                if clean_text(search_text) in clean_text(window_text):
+                if start_sequence.strip('.,!?;:"\'') in current_sequence:
                     start_idx = i
                     break
-
-            if start_idx == -1:
-                print(f"Warning: Could not find start of segment: {search_text}")
-                return {
-                    'start': None,
-                    'end': None,
-                    'words': [],
-                    'operation_status': 'failed'
-                }
-
-            # Find the end of the segment
-            end_words = segment_words[-min(5, len(segment_words)):]  # Use up to last 5 words
-            end_text = ' '.join(end_words)
             
+            # Start matching from the found position
+            current_pos = 0
             for i in range(start_idx, len(word_timings)):
-                # Build a window of text from current position
-                window_text = ' '.join(
-                    clean_text(t.get('text', '')) 
-                    for t in word_timings[i:i+len(end_words)]
-                )
-                
-                if clean_text(end_text) in clean_text(window_text):
-                    end_idx = i + len(end_words) - 1  # Include all matched words
+                if current_pos >= len(segment_words):
                     break
-
-            if end_idx == -1 or end_idx <= start_idx:
-                # If we can't find the end, try to estimate it based on word count
-                estimated_words = len(segment_words)
-                end_idx = min(start_idx + estimated_words, len(word_timings) - 1)
-            
-            # Get timing information
-            try:
-                start_time = float(word_timings[start_idx].get('start', 0))
-                end_time = float(word_timings[min(end_idx, len(word_timings)-1)].get('end', 0))
-                
-                # Validate timing values
-                if start_time >= end_time or start_time < 0:
-                    print(f"Warning: Invalid timing values found: start={start_time}, end={end_time}")
-                    return {
-                        'start': None,
-                        'end': None,
-                        'words': [],
-                        'operation_status': 'failed'
-                    }
                     
-                return {
-                    'start': start_time,
-                    'end': end_time,
-                    'words': word_timings[start_idx:end_idx+1],
-                    'operation_status': 'success'
-                }
+                timing_word = word_timings[i]['text'].strip().lower()
+                segment_word = segment_words[current_pos].lower()
                 
-            except Exception as e:
-                print(f"Error extracting timing values: {str(e)}")
+                # Skip punctuation and whitespace for comparison
+                if timing_word.strip('.,!?;:"\'') == segment_word.strip('.,!?;:"\''):
+                    matching_words.append(word_timings[i])
+                    current_pos += 1
+            
+            if not matching_words:
+                print(f"Warning: No matching words found for segment starting with: {start_sequence}")
                 return {
                     'start': None,
                     'end': None,
                     'words': [],
                     'operation_status': 'failed'
                 }
-
+            
+            # Verify we matched most of the words (at least 80%)
+            if len(matching_words) < len(segment_words) * 0.8:
+                print(f"Warning: Only matched {len(matching_words)}/{len(segment_words)} words")
+                return {
+                    'start': None,
+                    'end': None,
+                    'words': [],
+                    'operation_status': 'failed'
+                }
+            
+            return {
+                'start': matching_words[0]['start'],
+                'end': matching_words[-1]['end'],
+                'words': matching_words,
+                'operation_status': 'success'
+            }
+            
         except Exception as e:
             print(f"Error in get_segment_timings: {str(e)}")
             return {
@@ -449,33 +264,19 @@ class SmartTextProcessor:
                 'word_timings': []
             }]
 
-    def generate_hashtags(self, content, max_tags=5):
-        """Generate relevant hashtags for the content"""
-        prompt = f"""
-        Generate {max_tags} relevant hashtags for this content:
-        {content}
-
-        Requirements:
-        1. Start each with #
-        2. No spaces in hashtags
-        3. Mix of broad and specific tags
-        4. All lowercase
-        5. Return only the hashtags separated by spaces
-
-        Example format: #motivation #success #mindset #growth #wisdom
-        """
-        
-        try:
-            response = self.get_ai_response(prompt)
-            hashtags = response['choices'][0]['message']['content'].strip()
-            return hashtags.split()
-        except:
-            # Fallback to basic hashtags from keywords
-            keywords = self.extract_keywords(content)
-            return [f"#{keyword.lower()}" for keyword in keywords[:max_tags]]
-
     def get_thematic_segments(self, text):
         """Get thematic segments using AI assistance"""
+        json_template = '''
+{
+    "segments": [
+        {
+            "title": "Compelling Title Here",
+            "content": "Complete segment content here",
+            "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
+        }
+    ]
+}'''
+
         prompt = f"""
         Analyze this text and divide it into 1-2 minute segments. Each segment should be a complete, standalone story.
 
@@ -486,76 +287,68 @@ class SmartTextProcessor:
         2. Include proper context and background in each segment
         3. Each segment should be 150-300 words (1-2 minutes of speaking)
         4. Give each segment a compelling title
-        5. Format as valid JSON with this exact structure:
-        {{
-            "segments": [
-                {{
-                    "title": "Compelling Title Here",
-                    "content": "Complete segment content here"
-                }}
-            ]
-        }}
+        5. Include 5 relevant keywords or tags for each segment
+        6. IMPORTANT: Segments must not overlap in content - each piece of text should appear in exactly one segment
+        7. Format as valid JSON with this exact structure:
+{json_template}
 
         Important:
         - Keep original text exactly as provided (don't paraphrase)
         - Preserve word order for timing alignment
         - Make clean cuts between segments at natural breaks
+        - Keywords should be relevant to the segment's specific content
+        - Return ONLY the JSON, no additional text or formatting
         """
 
         try:
             response = self.get_ai_response(prompt)
             if not response or 'choices' not in response:
                 print("Error: Invalid AI response")
-                return {
-                    "segments": [{
-                        "title": "Complete Content",
-                        "content": text,
-                        "keywords": self.extract_keywords(text)
-                    }]
-                }
+                return self._create_fallback_segment(text)
 
+            # Extract the content from the response
             response_text = response['choices'][0]['message']['content'].strip()
-            response_text = response_text.replace('```json', '').replace('```', '').strip()
+            
+            # Find the JSON content between triple backticks if present
+            json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response_text, re.DOTALL)
+            if json_match:
+                response_text = json_match.group(1)
             
             try:
                 segments_data = json.loads(response_text)
                 
-                # Add keywords to each segment
+                # Ensure each segment has keywords, fallback to extracted keywords if missing
                 for segment in segments_data['segments']:
-                    segment['keywords'] = self.extract_keywords(segment['content'])
+                    if 'keywords' not in segment or not segment['keywords']:
+                        segment['keywords'] = self.extract_keywords(segment['content'])
+                    # Limit to 5 keywords if more were provided
+                    segment['keywords'] = segment['keywords'][:5]
                 
+                # Validate segments structure
+                if not isinstance(segments_data, dict) or 'segments' not in segments_data:
+                    print("Error: Invalid segments structure")
+                    return self._create_fallback_segment(text)
+                
+                return segments_data
+
             except json.JSONDecodeError as e:
                 print(f"Error parsing JSON response: {e}")
-                return {
-                    "segments": [{
-                        "title": "Complete Content",
-                        "content": text,
-                        "keywords": self.extract_keywords(text)
-                    }]
-                }
-            
-            # Validate segments structure
-            if not isinstance(segments_data, dict) or 'segments' not in segments_data:
-                print("Error: Invalid segments structure")
-                return {
-                    "segments": [{
-                        "title": "Complete Content",
-                        "content": text,
-                        "keywords": self.extract_keywords(text)
-                    }]
-                }
-            
-            return segments_data
+                print(f"Response text was: {response_text}")
+                return self._create_fallback_segment(text)
 
         except Exception as e:
             print(f"Error in get_thematic_segments: {str(e)}")
-            return {
-                "segments": [{
-                    "title": "Complete Content",
-                    "content": text,
-                    "keywords": self.extract_keywords(text)
-                }]
-            }
+            return self._create_fallback_segment(text)
+
+    def _create_fallback_segment(self, text):
+        """Create a fallback segment when processing fails"""
+        return {
+            "segments": [{
+                "title": "Complete Content",
+                "content": text,
+                "keywords": self.extract_keywords(text)
+            }]
+        }
 
 def main():
     pass

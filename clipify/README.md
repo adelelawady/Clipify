@@ -64,7 +64,6 @@ A powerful Python tool for processing video content into social media-friendly s
 
 - Python 3.8+
 - FFmpeg installed and in PATH
-- NLTK resources
 - Required Python packages (see requirements.txt)
 - API key for content processing services
 

@@ -20,13 +20,15 @@ class HyperbolicAI(AIProvider):
         "default": "deepseek-ai/DeepSeek-V3"
     }
     
-    def __init__(self, api_key, model="default"):
+    def __init__(self, api_key, model="default", max_tokens=5012, temperature=0.7):
         self.url = "https://api.hyperbolic.xyz/v1/chat/completions"
         self.headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}"
         }
         self.model = model
+        self.max_tokens = max_tokens
+        self.temperature = temperature
         self.cache = {}
 
     def get_response(self, prompt, retry_count=3):
@@ -44,8 +46,8 @@ class HyperbolicAI(AIProvider):
                         }
                     ],
                     "model": self.model,
-                    "max_tokens": 5012,
-                    "temperature": 0.7,
+                    "max_tokens": self.max_tokens,
+                    "temperature": self.temperature,
                     "top_p": 0.9
                 }
                 
@@ -73,7 +75,7 @@ class OpenAIProvider(AIProvider):
         "default": "gpt-4"
     }
     
-    def __init__(self, api_key, model="default"):
+    def __init__(self, api_key, model="default", max_tokens=2048, temperature=0.7):
         try:
             import openai
             self.openai = openai
@@ -81,6 +83,8 @@ class OpenAIProvider(AIProvider):
         except ImportError:
             raise ImportError("OpenAI package not installed. Install with: pip install openai")
         self.model = model
+        self.max_tokens = max_tokens
+        self.temperature = temperature
         self.cache = {}
 
     def get_response(self, prompt, retry_count=3):
@@ -95,8 +99,8 @@ class OpenAIProvider(AIProvider):
                     messages=[
                         {"role": "user", "content": prompt}
                     ],
-                    temperature=0.7,
-                    max_tokens=2048
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens
                 )
                 
                 # Convert OpenAI response format to match Hyperbolic format
@@ -128,13 +132,15 @@ class AnthropicProvider(AIProvider):
         "default": "claude-3-sonnet-20240229"
     }
     
-    def __init__(self, api_key, model="default"):
+    def __init__(self, api_key, model="default", max_tokens=2048, temperature=0.7):
         try:
             import anthropic
             self.client = anthropic.Anthropic(api_key=api_key)
         except ImportError:
             raise ImportError("Anthropic package not installed. Install with: pip install anthropic")
         self.model = model
+        self.max_tokens = max_tokens
+        self.temperature = temperature
         self.cache = {}
 
     def get_response(self, prompt, retry_count=3):
@@ -146,8 +152,8 @@ class AnthropicProvider(AIProvider):
             try:
                 response = self.client.messages.create(
                     model=self.model,
-                    max_tokens=2048,
-                    temperature=0.7,
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature,
                     messages=[
                         {"role": "user", "content": prompt}
                     ]
@@ -172,7 +178,13 @@ class AnthropicProvider(AIProvider):
                 
         return None
 
-def get_ai_provider(provider_name: str, api_key: str, model: str = "default") -> AIProvider:
+def get_ai_provider(
+    provider_name: str, 
+    api_key: str, 
+    model: str = "default",
+    max_tokens: int = None,
+    temperature: float = None
+) -> AIProvider:
     """
     Factory function to get AI provider instance
     
@@ -180,15 +192,24 @@ def get_ai_provider(provider_name: str, api_key: str, model: str = "default") ->
         provider_name: Name of the AI provider
         api_key: API key for the provider
         model: Model name to use (provider-specific)
+        max_tokens: Maximum number of tokens in response (optional)
+        temperature: Temperature for response generation (optional)
     """
     providers = {
-        "hyperbolic": HyperbolicAI,
-        "openai": OpenAIProvider,
-        "anthropic": AnthropicProvider
+        "hyperbolic": (HyperbolicAI, 5012, 0.7),
+        "openai": (OpenAIProvider, 5048, 0.7),
+        "anthropic": (AnthropicProvider, 5048, 0.7)
     }
     
-    provider_class = providers.get(provider_name.lower())
-    if not provider_class:
+    provider_info = providers.get(provider_name.lower())
+    if not provider_info:
         raise ValueError(f"Unknown AI provider: {provider_name}. Available providers: {', '.join(providers.keys())}")
     
-    return provider_class(api_key, model) 
+    provider_class, default_max_tokens, default_temp = provider_info
+    
+    return provider_class(
+        api_key, 
+        model,
+        max_tokens=max_tokens if max_tokens is not None else default_max_tokens,
+        temperature=temperature if temperature is not None else default_temp
+    ) 

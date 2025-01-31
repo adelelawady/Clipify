@@ -2,18 +2,12 @@
 numpy>=1.19.0
 moviepy>=1.0.3
 pydub>=0.25.1
-nltk>=3.6.0
 textblob>=0.15.3
 whisper>=1.0.0
 requests>=2.25.1
 captacity-clipify==0.3.2
 ffmpeg-python>=0.2.0  # For video manipulation
 
-
-# Text processing
-transformers>=4.5.0  # For text analysis
-torch>=1.8.0  # Required for transformers
-torchaudio>=0.8.0  # Required for audio processing
 
 # Utility packages
 tqdm>=4.60.0  # For progress bars
