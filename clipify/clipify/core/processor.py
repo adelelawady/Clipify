@@ -1,6 +1,5 @@
 import os
 import json
-import nltk
 from .text_processor import SmartTextProcessor
 from pathlib import Path
 from ..audio.extractor import AudioExtractor
@@ -9,14 +8,6 @@ from ..video.cutter import VideoCutter
 from ..video.processor import VideoProcessor
 from ..video.converter import VideoConverter
 
-# Download required NLTK resources
-try:
-    nltk.download('punkt', quiet=True)
-    nltk.download('punkt_tab', quiet=True)
-    nltk.download('averaged_perceptron_tagger', quiet=True)
-    nltk.download('stopwords', quiet=True)
-except Exception as e:
-    print(f"Warning: Error downloading NLTK resources: {e}")
 
 class ContentProcessor:
     def __init__(self, ai_provider):
@@ -34,27 +25,11 @@ class ContentProcessor:
         self.audio_extractor = AudioExtractor()
         self.speech_to_text = SpeechToText()
         
-        # Ensure NLTK resources are downloaded
-        self.ensure_nltk_resources()
+
         
         self.transcripts_dir = "transcripts"
         self.processed_dir = "processed_content"
         
-    def ensure_nltk_resources(self):
-        """Ensure all required NLTK resources are available"""
-        required_resources = [
-            'punkt',
-            'punkt_tab',
-            'averaged_perceptron_tagger',
-            'stopwords'
-        ]
-        
-        for resource in required_resources:
-            try:
-                nltk.data.find(f'tokenizers/{resource}')
-            except LookupError:
-                print(f"Downloading required NLTK resource: {resource}")
-                nltk.download(resource, quiet=True)
     
     def ensure_directories(self):
         """Ensure necessary directories exist"""
@@ -173,8 +148,6 @@ class ContentProcessor:
             if transcript_text:
                 # Process the transcript into segments
                 try:
-                    # Ensure NLTK resources before processing
-                    self.ensure_nltk_resources()
                     
                     # Read word timings if available
                     word_timings = None

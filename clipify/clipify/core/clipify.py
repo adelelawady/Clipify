@@ -17,7 +17,9 @@ class Clipify:
         convert_to_mobile=True,
         add_captions=True,
         mobile_ratio="9:16",
-        caption_options=None
+        caption_options=None,
+        max_tokens=5048,
+        temperature=0.7
     ):
         """
         Initialize Clipify with processing options
@@ -30,6 +32,8 @@ class Clipify:
             add_captions: Whether to add captions to segments
             mobile_ratio: Aspect ratio for mobile conversion
             caption_options: Dictionary of caption styling options (font_size, font_color, etc.)
+            max_tokens: Maximum number of tokens in response (optional)
+            temperature: Temperature for response generation (optional)
         """
         # Store configuration
         self.convert_to_mobile = convert_to_mobile
@@ -46,7 +50,7 @@ class Clipify:
                 )
         
         # Initialize AI provider and processor
-        self.ai_provider = get_ai_provider(provider_name, api_key, model)
+        self.ai_provider = get_ai_provider(provider_name, api_key, model, max_tokens, temperature)
         self.processor = ContentProcessor(self.ai_provider)
         
         # Initialize video components only if needed

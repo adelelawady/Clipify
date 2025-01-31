@@ -1,6 +1,9 @@
 import whisper
 from typing import Optional, Dict, Any
 import os
+import sys
+
+
 
 class SpeechToText:
     def __init__(self, model_size="base"):
@@ -10,7 +13,15 @@ class SpeechToText:
         Args:
             model_size (str): Whisper model size ("tiny", "base", "small", "medium", "large")
         """
-        self.model = whisper.load_model(model_size)
+        # Determine the base path
+        if getattr(sys, 'frozen', False):  # If running as PyInstaller .exe
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+
+        # Set Whisper’s asset directory
+        whisper.utils.ASSET_DIR = os.path.join(base_path, "whisper/assets")
+        self.model = whisper.load_model(model_size,)
 
     def convert_to_text(self, audio_path):
         """
@@ -28,24 +39,38 @@ class SpeechToText:
             if not os.path.exists(audio_path):
                 raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
-            # Transcribe audio
-            print("Running Whisper transcription...")
-            result = self.model.transcribe(audio_path)
+            # Transcribe audio with word timestamps
+            print("Running Whisper transcription with word timestamps...")
+            result = self.model.transcribe(audio_path, word_timestamps=True)
             
             if not result or 'text' not in result:
                 raise Exception("Whisper transcription failed to return valid result")
             
             print("Transcription completed successfully")
+            
+            # Process word-level timestamps
+            word_timings = []
+            for segment in result['segments']:
+                if 'words' not in segment:
+                    continue
+                    
+                for word_data in segment['words']:
+                    # Check if word_data has the required fields
+                    if isinstance(word_data, dict) and 'word' in word_data and 'start' in word_data and 'end' in word_data:
+                        word_timings.append({
+                            'text': word_data['word'].strip(),
+                            'start': word_data['start'],
+                            'end': word_data['end']
+                        })
+                    else:
+                        print(f"Warning: Skipping malformed word data: {word_data}")
+            
+            if not word_timings:
+                print("Warning: No valid word timings found in transcription")
+            
             return {
                 'text': result['text'],
-                'word_timings': [
-                    {
-                        'text': segment['text'],
-                        'start': segment['start'],
-                        'end': segment['end']
-                    }
-                    for segment in result['segments']
-                ]
+                'word_timings': word_timings
             }
 
         except Exception as e:
