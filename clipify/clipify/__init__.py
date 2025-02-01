@@ -1,6 +1,6 @@
 from clipify.core.processor import ContentProcessor
 from clipify.core.text_processor import SmartTextProcessor
-from clipify.core.ai_providers import HyperbolicAI, OpenAIProvider, AnthropicProvider
+from clipify.core.ai_providers import HyperbolicAI, OpenAIProvider, AnthropicProvider ,OllamaProvider
 from clipify.core.clipify import Clipify
 from clipify.video.cutter import VideoCutter
 from clipify.video.converter import VideoConverter
@@ -31,6 +31,7 @@ __all__ = [
     'HyperbolicAI',
     'OpenAIProvider',
     'AnthropicProvider',
+    'OllamaProvider',
     'Clipify',
     'VideoCutter',
     'VideoConverter',
