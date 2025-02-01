@@ -5,7 +5,7 @@ pydub>=0.25.1
 textblob>=0.15.3
 whisper>=1.0.0
 requests>=2.25.1
-captacity-clipify==0.3.2
+captacity-clipify==0.3.3
 ffmpeg-python>=0.2.0  # For video manipulation
 
 
