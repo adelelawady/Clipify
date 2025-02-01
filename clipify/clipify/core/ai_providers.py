@@ -178,6 +178,67 @@ class AnthropicProvider(AIProvider):
                 
         return None
 
+class OllamaProvider(AIProvider):
+    """Ollama local AI provider implementation"""
+    
+    AVAILABLE_MODELS = {
+        "llama2": "llama2",
+        "mistral": "mistral",
+        "codellama": "codellama",
+        "default": "llama2"
+    }
+    
+    def __init__(self, model="default", max_tokens=2048, temperature=0.7):
+        self.url = "http://localhost:11434/api/chat"
+        self.model = model
+        self.max_tokens = max_tokens
+        self.temperature = temperature
+        self.cache = {}
+
+    def get_response(self, prompt, retry_count=3):
+        """Get response from Ollama with retry mechanism and caching"""
+        if prompt in self.cache:
+            return self.cache[prompt]
+            
+        for attempt in range(retry_count):
+            try:
+                data = {
+                    "model": self.model,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    "stream": False,
+                    "options": {
+                        "temperature": self.temperature,
+                        "num_predict": self.max_tokens
+                    }
+                }
+                
+                response = requests.post(self.url, json=data)
+                response_json = response.json()
+                
+                # Convert Ollama response format to match Hyperbolic format
+                result = {
+                    "choices": [{
+                        "message": {
+                            "content": response_json.get("message", {}).get("content", "")
+                        }
+                    }]
+                }
+                
+                self.cache[prompt] = result
+                return result
+                
+            except Exception as e:
+                if attempt == retry_count - 1:
+                    raise e
+                time.sleep(1)
+                
+        return None
+
 def get_ai_provider(
     provider_name: str, 
     api_key: str, 
@@ -190,7 +251,7 @@ def get_ai_provider(
     
     Args:
         provider_name: Name of the AI provider
-        api_key: API key for the provider
+        api_key: API key for the provider (not needed for Ollama)
         model: Model name to use (provider-specific)
         max_tokens: Maximum number of tokens in response (optional)
         temperature: Temperature for response generation (optional)
@@ -198,7 +259,8 @@ def get_ai_provider(
     providers = {
         "hyperbolic": (HyperbolicAI, 5012, 0.7),
         "openai": (OpenAIProvider, 5048, 0.7),
-        "anthropic": (AnthropicProvider, 5048, 0.7)
+        "anthropic": (AnthropicProvider, 5048, 0.7),
+        "ollama": (OllamaProvider, 2048, 0.7)
     }
     
     provider_info = providers.get(provider_name.lower())
