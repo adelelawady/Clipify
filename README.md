@@ -51,10 +51,10 @@
 Download and install the latest version:
 
 <p align="center">
-  <a href="https://github.com/adelelawady/clipify-hub/releases/download/latest/clipify-hub-installer.exe">
+  <a href="https://github.com/adelelawady/Clipify-Hub/releases/download/3.3.0/clipify-hub-installer.exe">
     <img src="https://img.shields.io/badge/Download-Installable%20App-blue?style=for-the-badge&logo=windows" alt="Download Installable">
   </a>
-  <a href="https://github.com/adelelawady/clipify-hub/releases/download/latest/clipify-hub-server.exe">
+  <a href="https://github.com/adelelawady/Clipify-Hub/releases/download/3.3.0/clipify-hub-server.exe">
     <img src="https://img.shields.io/badge/Download-Server%20Only-green?style=for-the-badge&logo=docker" alt="Download Server">
   </a>
 </p>

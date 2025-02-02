@@ -21,7 +21,7 @@ def basic_clipify_example():
     # Initialize with basic configuration
     clipify = Clipify(
         provider_name="hyperbolic",
-        api_key="your-api-key",
+        api_key="api-key",
         model="deepseek-ai/DeepSeek-V3",
         convert_to_mobile=True,
         add_captions=True
@@ -175,10 +175,10 @@ def main():
     
     try:
         basic_clipify_example()
-        advanced_clipify_example()
-        audio_processing_example()
-        video_processing_example()
-        text_processing_example()
+        #advanced_clipify_example()
+        #audio_processing_example()
+        #video_processing_example()
+        #text_processing_example()
         
         print("\nAll examples completed successfully!")
         
