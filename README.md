@@ -209,6 +209,57 @@ if result:
 ```
 
 
+## VideoProcessor
+
+```python
+from clipify.video.processor import VideoProcessor
+
+# Initialize video processor with caption styling
+processor = VideoProcessor(
+    # Font settings
+    font="Bangers-Regular.ttf",
+    font_size=60,
+    font_color="white",
+    
+    # Text effects
+    stroke_width=2,
+    stroke_color="black",
+    shadow_strength=0.8,
+    shadow_blur=0.08,
+    
+    # Caption behavior
+    highlight_current_word=True,
+    word_highlight_color="red",
+    line_count=1,
+    padding=50,
+    position="bottom"  # Options: "bottom", "top", "center"
+)
+
+# Process video with captions
+result = processor.process_video(
+    input_video="input_video.mp4",
+    output_video="captioned_output.mp4",
+    use_local_whisper="auto"  # Options: "auto", True, False
+)
+
+if result:
+    print("Video successfully processed with captions")
+
+# Process multiple video segments
+segment_files = ["segment1.mp4", "segment2.mp4", "segment3.mp4"]
+processed_segments = processor.process_video_segments(
+    segment_files=segment_files,
+    output_dir="processed_segments"
+)
+```
+
+The VideoProcessor provides powerful captioning capabilities:
+- Customizable font styling and text effects
+- Word-level highlighting for better readability
+- Shadow and stroke effects for visibility
+- Automatic speech recognition using Whisper
+- Support for batch processing multiple segments
+
 ## VideoCutter
 
 ```python
