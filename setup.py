@@ -8,7 +8,7 @@ requirements = [
     "captacity_clipify==0.3.4",
     "opencv-python==4.8.0.74",
     "moviepy==1.0.3",
-    "numpy==1.24.3",
+    "numpy==1.26.4",
     "openai==1.61.0",
     "pydub==0.25.1",
     "requests==2.31.0",
@@ -19,7 +19,7 @@ requirements = [
 
 setup(
     name="clipify",
-    version="2.1.2",
+    version="2.1.4",
     author="Adel Elawady",
     author_email="adel50ali50@gmail.com",
     description="A powerful tool for processing video content into social media-friendly segments",
