@@ -306,32 +306,34 @@ if segments:
 ```
 clipify/
 ├── clipify/
-│   ├── __init__.py                 # Package initialization and version
+│   ├── __init__.py           # Package exports and version info
 │   ├── core/
-│   │   ├── __init__.py
-│   │   ├── clipify.py             # Main Clipify class
-│   │   ├── processor.py           # Content processing logic
-│   │   ├── text_processor.py      # Text analysis and segmentation
-│   │   └── ai_providers.py        # AI provider implementations
+│   │   ├── __init__.py       # Core module exports
+│   │   ├── clipify.py        # Main Clipify class implementation
+│   │   ├── processor.py      # Content processing and segmentation
+│   │   ├── text_processor.py # Text analysis and theme detection
+│   │   └── ai_providers.py  # AI providers (OpenAI, Anthropic, Hyperbolic)
 │   ├── video/
-│   │   ├── __init__.py
-│   │   ├── cutter.py             # Video cutting functionality
-│   │   ├── converter.py          # Mobile format conversion
-│   │   ├── converterStretch.py   # Alternative conversion method
-│   │   └── processor.py          # Video processing and captions
+│   │   ├── __init__.py       # Video module exports
+│   │   ├── processor.py      # Video captioning and effects
+│   │   ├── converter.py      # Mobile format with blur background
+│   │   ├── converter_stretch.py  # Stretch-based format conversion
+│   │   └── cutter.py         # Video segment extraction
 │   ├── audio/
-│   │   ├── __init__.py
-│   │   ├── extractor.py          # Audio extraction from video
-│   │   └── speech.py             # Speech-to-text conversion
-│   └── utils/                    # Utility functions
-│       ├── __init__.py
-│       └── helpers.py
-├── .gitignore                   # Git ignore rules
-├── LICENSE                      # MIT License
-├── MANIFEST.in                  # Package manifest
-├── README.md                    # Project documentation
-├── requirements.txt             # Dependencies
-└── setup.py                     # Package setup
+│   │   ├── __init__.py       # Audio module exports
+│   │   ├── extractor.py      # FFmpeg-based audio extraction
+│   │   └── speech.py         # Whisper speech recognition
+├── scripts/
+│   ├── build.sh              # Package build script
+│   └── publish.sh            # PyPI publishing script
+├── .gitignore                # Git ignore patterns
+├── LICENSE                 # MIT License
+├── MANIFEST.in             # Package manifest
+├── README.md               # Project documentation
+├── requirements.txt        # Project dependencies
+└── setup.py  # Package configuration
+
+
 ```
 
 ## 🛠️ Configuration Options
