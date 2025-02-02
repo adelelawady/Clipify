@@ -1,8 +1,10 @@
-
-
 <p align="center">
   <img src="https://github.com/user-attachments/assets/58aecd53-d720-4716-96f2-002beebb52b3" alt="Clipify Logo" width="100"/>
 </p>
+
+# Clipify
+
+> An AI-powered video processing toolkit for creating social media-optimized content with automated transcription, captioning, and thematic segmentation.
 
 [![Development Status](https://img.shields.io/badge/status-beta-yellow.svg)](https://github.com/adelelawady/clipify)
 [![PyPI version](https://img.shields.io/pypi/v/clipify.svg)](https://pypi.org/project/clipify/)
@@ -10,143 +12,195 @@
 [![License](https://img.shields.io/pypi/l/clipify.svg)](https://github.com/adelelawady/clipify/blob/main/LICENSE)
 [![Downloads](https://img.shields.io/pypi/dm/clipify.svg)](https://pypi.org/project/clipify/)
 [![GitHub stars](https://img.shields.io/github/stars/adelelawady/Clipify.svg)](https://github.com/adelelawady/Clipify/stargazers)
-[![GitHub issues](https://img.shields.io/github/issues/adelelawady/Clipify.svg)](https://github.com/adelelawady/Clipify/issues)
-[![Made with Python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)](https://www.python.org/)
-[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/adelelawady/Clipify/graphs/commit-activity)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat)](https://makeapullrequest.com)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Documentation Status](https://img.shields.io/badge/docs-passing-brightgreen.svg)](https://github.com/adelelawady/Clipify#readme)
-[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/adelelawady/Clipify)
-[![GitHub contributors](https://img.shields.io/github/contributors/adelelawady/Clipify.svg)](https://github.com/adelelawady/Clipify/graphs/contributors/)
-[![Open Source](https://badges.frapsoft.com/os/v1/open-source.svg?v=103)](https://opensource.org/)
-[![Ask Me Anything !](https://img.shields.io/badge/Ask%20me-anything-1abc9c.svg)](https://github.com/adelelawady/Clipify/issues)
-[![Awesome](https://cdn.rawgit.com/sindresorhus/awesome/d7305f38d29fed78fa85652e3a63e154dd8e8829/media/badge.svg)](https://github.com/adelelawady/Clipify)
-[![FFmpeg](https://img.shields.io/badge/FFmpeg-007808?style=flat&logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
-[![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=flat&logo=openai&logoColor=white)](https://openai.com/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=flat&logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![NumPy](https://img.shields.io/badge/NumPy-013243?style=flat&logo=numpy&logoColor=white)](https://numpy.org/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-<!-- Social & Support -->
-[![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-☕-yellow.svg)](https://buymeacoffee.com/adel50ali5b)
+## 🌟 Key Features
 
+### Content Processing
+- **Video Processing Pipeline**
+  - Automated audio extraction and speech-to-text conversion
+  - Smart thematic segmentation using AI
+  - Mobile-optimized format conversion (9:16, 4:5, 1:1)
+  - Intelligent caption generation and overlay
 
+### AI Capabilities
+- **Advanced Analysis**
+  - Context-aware content segmentation
+  - Dynamic title generation
+  - Smart keyword and hashtag extraction
+  - Sentiment analysis for content optimization
 
-A powerful Python tool for processing video content into social media-friendly segments with automated transcription, captioning, and thematic segmentation.
+### Platform Options
+- **Desktop Application**
+  - Intuitive graphical interface
+  - Drag-and-drop functionality
+  - Real-time processing feedback
+  - Batch processing capabilities
 
+- **Server Deployment**
+  - RESTful API integration
+  - Asynchronous processing with webhooks
+  - Multi-tenant architecture
+  - Containerized deployment support
 
-![Screenshot 2025-01-25 045729](https://github.com/user-attachments/assets/f6b9ff76-181b-4de8-b19a-78eff0a2c86a)
+## 🚀 Quick Start
 
+### Desktop Application
 
+Download and install the latest version:
 
+<p align="center">
+  <a href="https://github.com/adelelawady/clipify-hub/releases/download/latest/clipify-hub-installer.exe">
+    <img src="https://img.shields.io/badge/Download-Desktop%20App-blue?style=for-the-badge&logo=windows" alt="Download Desktop">
+  </a>
+  <a href="https://github.com/adelelawady/clipify-hub/releases/download/latest/clipify-hub-server.exe">
+    <img src="https://img.shields.io/badge/Download-Server-green?style=for-the-badge&logo=docker" alt="Download Server">
+  </a>
+</p>
 
-## Features
-
-- 🎥 Video Processing
-  - Extracts audio from video files
-  - Converts speech to text with timing information
-  - Segments videos by theme and content
-  - Converts videos to mobile-friendly format (9:16 aspect ratio)
-  - Adds auto-generated captions
-
-- 🤖 AI-Powered Content Analysis
-  - Intelligent thematic segmentation
-  - Smart title generation
-  - Keyword extraction
-  - Sentiment analysis
-  - Hashtag generation
-
-- 📝 Transcript Processing
-  - Generates accurate transcripts with timing information
-  - Processes transcripts into coherent segments
-  - Maintains timing alignment for precise video cutting
-
-## Prerequisites
-
-- Python 3.8+
-- FFmpeg installed and in PATH
-- Required Python packages (see requirements.txt)
-- API key for content processing services
-
-# Clone the repository:
-
-## Installation
-
-### install from pip
+### Python Package Installation
 
 ```bash
+# Via pip
 pip install clipify
-```
 
-### install from source
-
-```bash
+# From source
 git clone https://github.com/adelelawady/Clipify.git
 cd Clipify
-```
-
-# Install the dependencies:
-
-```bash
 pip install -r requirements.txt
 ```
 
-## Usage
+## 💻 Usage Examples
 
-1. Basic video processing:
-
+### Basic Implementation
 ```python
 from clipify.core.clipify import Clipify
-    # Initialize Clipify with Hyperbolic or OpenAI or Anthropic AI and specific model
-    clipify = Clipify(
-        provider_name="hyperbolic",
-        api_key="api-key",
-        model="deepseek-ai/DeepSeek-V3",  # Specify model
-        convert_to_mobile=True,
-        add_captions=True,
-        mobile_ratio="9:16"
-    )
-    
-    # Process a video
-    result = clipify.process_video("path/to/video.mp4")
-    
-    if result:
-        print("\nProcessing Summary:")
-        print(f"Processed video: {result['video_path']}")
-        print(f"Created {len(result['segments'])} segments")
-        
-        for segment in result['segments']:
-            print(f"\nSegment #{segment['segment_number']}: {segment['title']}")
-            if 'cut_video' in segment:
-                print(f"Cut video: {segment['cut_video']}")
-            if 'mobile_video' in segment:
-                print(f"Mobile version: {segment['mobile_video']}")
-            if 'captioned_video' in segment:
-                print(f"Captioned version: {segment['captioned_video']}")
+
+# Initialize with basic configuration
+clipify = Clipify(
+    provider_name="hyperbolic",
+    api_key="your-api-key",
+    model="deepseek-ai/DeepSeek-V3",
+    convert_to_mobile=True,
+    add_captions=True
+)
+
+# Process video
+result = clipify.process_video("input.mp4")
+
+# Handle results
+if result:
+    print(f"Created {len(result['segments'])} segments")
+    for segment in result['segments']:
+        print(f"Segment {segment['segment_number']}: {segment['title']}")
 ```
 
-## Project Structure
+### Advanced Configuration
+```python
+clipify = Clipify(
+    # AI Configuration
+    provider_name="hyperbolic",
+    api_key="your-api-key",
+    model="deepseek-ai/DeepSeek-V3",
+    max_tokens=5048,
+    temperature=0.7,
+    
+    # Video Processing
+    convert_to_mobile=True,
+    add_captions=True,
+    mobile_ratio="9:16",
+    
+    # Caption Styling
+    caption_options={
+        "font": "Bangers-Regular.ttf",
+        "font_size": 60,
+        "font_color": "white",
+        "stroke_width": 2,
+        "stroke_color": "black",
+        "highlight_current_word": True,
+        "word_highlight_color": "red",
+        "shadow_strength": 0.8,
+        "shadow_blur": 0.08,
+        "line_count": 1,
+        "padding": 50,
+        "position": "bottom"
+    }
+)
+```
 
+## 📦 Project Structure
 ```
 clipify/
 ├── clipify/
-│ ├── init.py
-│ ├── content_processor.py
-│ ├── video_processor.py
-│ └── utils/
-│ ├── audio.py
-│ ├── captions.py
-│ └── transcription.py
+│   ├── __init__.py
+│   ├── core/
+│   │   ├── clipify.py
+│   │   ├── content_processor.py
+│   │   └── video_processor.py
+│   └── utils/
+│       ├── audio.py
+│       ├── captions.py
+│       └── transcription.py
 ├── tests/
-├── requirements.txt
-├── setup.py
-└── README.md
+├── examples/
+├── docs/
+└── requirements.txt
 ```
 
-  
-## License
+## 🛠️ Configuration Options
+
+### AI Providers
+- `hyperbolic`: Default provider with DeepSeek-V3 model
+- `openai`: OpenAI GPT models support
+- `anthropic`: Anthropic Claude models
+- `ollama`: Local model deployment
+
+### Video Formats
+- Aspect Ratios: `1:1`, `4:5`, `9:16`
+- Output Formats: MP4, MOV
+- Quality Presets: Low, Medium, High
+
+### Caption Customization
+- Font customization
+- Color schemes
+- Position options
+- Animation effects
+- Word highlighting
+
+## 🤝 Contributing
+
+We welcome contributions! Here's how you can help:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+Please read our [Contributing Guidelines](CONTRIBUTING.md) for details.
+
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Contributing
+## 🌐 Support
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+- Enterprise Support: Contact support@clipify.ai
+- Community Support: [GitHub Issues](https://github.com/adelelawady/Clipify/issues)
+- Documentation: [Wiki](https://github.com/adelelawady/Clipify/wiki)
+
+## 🙏 Acknowledgments
+
+- FFmpeg for video processing
+- OpenAI for AI capabilities
+- PyTorch community
+- All contributors and supporters
+
+---
+
+<p align="center">
+  <a href="https://buymeacoffee.com/adel50ali5b">
+    <img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-☕-yellow.svg" alt="Buy me a coffee">
+  </a>
+</p>
