@@ -133,19 +133,32 @@ clipify = Clipify(
 ```
 clipify/
 ├── clipify/
-│   ├── __init__.py
+│   ├── __init__.py                 # Package initialization and version
 │   ├── core/
-│   │   ├── clipify.py
-│   │   ├── content_processor.py
-│   │   └── video_processor.py
-│   └── utils/
-│       ├── audio.py
-│       ├── captions.py
-│       └── transcription.py
-├── tests/
-├── examples/
-├── docs/
-└── requirements.txt
+│   │   ├── __init__.py
+│   │   ├── clipify.py             # Main Clipify class
+│   │   ├── processor.py           # Content processing logic
+│   │   ├── text_processor.py      # Text analysis and segmentation
+│   │   └── ai_providers.py        # AI provider implementations
+│   ├── video/
+│   │   ├── __init__.py
+│   │   ├── cutter.py             # Video cutting functionality
+│   │   ├── converter.py          # Mobile format conversion
+│   │   ├── converterStretch.py   # Alternative conversion method
+│   │   └── processor.py          # Video processing and captions
+│   ├── audio/
+│   │   ├── __init__.py
+│   │   ├── extractor.py          # Audio extraction from video
+│   │   └── speech.py             # Speech-to-text conversion
+│   └── utils/                    # Utility functions
+│       ├── __init__.py
+│       └── helpers.py
+├── .gitignore                   # Git ignore rules
+├── LICENSE                      # MIT License
+├── MANIFEST.in                  # Package manifest
+├── README.md                    # Project documentation
+├── requirements.txt             # Dependencies
+└── setup.py                     # Package setup
 ```
 
 ## 🛠️ Configuration Options
