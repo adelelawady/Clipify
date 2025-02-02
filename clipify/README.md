@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/58aecd53-d720-4716-96f2-002beebb52b3" alt="Clipify Logo" width="100"/>
-</p>
+<p align="center"> <img src="https://github.com/user-attachments/assets/876170d2-523c-4045-b4c9-67ac957e46c1" alt="Clipify Logo" width="150"> </p>
 
 # Clipify
 
@@ -48,14 +46,16 @@
 
 ### Desktop Application
 
+🚀 Check out our full project based on Clipify on [https://github.com/adelelawady/Clipify-hub](https://github.com/adelelawady/Clipify-hub) 🚀
+
 Download and install the latest version:
 
 <p align="center">
   <a href="https://github.com/adelelawady/clipify-hub/releases/download/latest/clipify-hub-installer.exe">
-    <img src="https://img.shields.io/badge/Download-Desktop%20App-blue?style=for-the-badge&logo=windows" alt="Download Desktop">
+    <img src="https://img.shields.io/badge/Download-Installable%20App-blue?style=for-the-badge&logo=windows" alt="Download Installable">
   </a>
   <a href="https://github.com/adelelawady/clipify-hub/releases/download/latest/clipify-hub-server.exe">
-    <img src="https://img.shields.io/badge/Download-Server-green?style=for-the-badge&logo=docker" alt="Download Server">
+    <img src="https://img.shields.io/badge/Download-Server%20Only-green?style=for-the-badge&logo=docker" alt="Download Server">
   </a>
 </p>
 
@@ -129,6 +129,128 @@ clipify = Clipify(
 )
 ```
 
+
+## AudioExtractor
+
+
+```python
+from clipify.audio.extractor import AudioExtractor
+
+# Initialize audio extractor
+extractor = AudioExtractor()
+
+# Extract audio from video
+audio_path = extractor.extract_audio(
+    video_path="input_video.mp4",
+    output_path="extracted_audio.wav"
+)
+
+if audio_path:
+    print(f"Audio successfully extracted to: {audio_path}")
+```
+
+##  SpeechToText
+
+```python
+from clipify.audio.speech import SpeechToText
+
+# Initialize speech to text converter
+converter = SpeechToText(model_size="base")  # Options: tiny, base, small, medium, large
+
+# Convert audio to text with timing
+result = converter.convert_to_text("audio_file.wav")
+
+if result:
+    print("Transcript:", result['text'])
+    print("\nWord Timings:")
+    for word in result['word_timings'][:5]:  # Show first 5 words
+        print(f"Word: {word['text']}")
+        print(f"Time: {word['start']:.2f}s - {word['end']:.2f}s")
+```
+
+## VideoConverter
+
+```python
+from clipify.video.converter import VideoConverter
+
+# Initialize video converter
+converter = VideoConverter()
+
+# Convert video to mobile format with blurred background
+result = converter.convert_to_mobile(
+    input_video="landscape_video.mp4",
+    output_video="mobile_video.mp4",
+    target_ratio="9:16"  # Options: "1:1", "4:5", "9:16"
+)
+
+if result:
+    print("Video successfully converted to mobile format")
+```
+
+
+## VideoConverterStretch
+
+
+```python
+from clipify.video.converterStretch import VideoConverterStretch
+
+# Initialize stretch converter
+stretch_converter = VideoConverterStretch()
+
+# Convert video using stretch method
+result = stretch_converter.convert_to_mobile(
+    input_video="landscape.mp4",
+    output_video="stretched.mp4",
+    target_ratio="4:5"  # Options: "1:1", "4:5", "9:16"
+)
+
+if result:
+    print("Video successfully converted using stretch method")
+```
+
+
+## VideoCutter
+
+```python
+from clipify.video.cutter import VideoCutter
+
+# Initialize video cutter
+cutter = VideoCutter()
+
+# Cut a specific segment
+result = cutter.cut_video(
+    input_video="full_video.mp4",
+    output_video="segment.mp4",
+    start_time=30.5,  # Start at 30.5 seconds
+    end_time=45.2     # End at 45.2 seconds
+)
+
+if result:
+    print("Video segment successfully cut")
+``` 
+
+
+## SmartTextProcessor
+
+```python
+from clipify.core.text_processor import SmartTextProcessor
+from clipify.core.ai_providers import HyperbolicAI
+
+# Initialize AI provider and text processor
+ai_provider = HyperbolicAI(api_key="your_api_key")
+processor = SmartTextProcessor(ai_provider)
+
+# Process text content
+text = "Your long text content here..."
+segments = processor.segment_by_theme(text)
+
+if segments:
+    for segment in segments['segments']:
+        print(f"\nTitle: {segment['title']}")
+        print(f"Keywords: {', '.join(segment['keywords'])}")
+        print(f"Content length: {len(segment['content'])} chars")
+```
+
 ## 📦 Project Structure
 ```
 clipify/
@@ -191,7 +313,7 @@ We welcome contributions! Here's how you can help:
 4. Push to branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-Please read our [Contributing Guidelines](CONTRIBUTING.md) for details.
+Please read our [Contributing Guidelines](LICENSE.md) for details.
 
 ## 📄 License
 
@@ -199,9 +321,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🌐 Support
 
-- Enterprise Support: Contact support@clipify.ai
+- Enterprise Support: Contact adel50ali5b@gmail.com
 - Community Support: [GitHub Issues](https://github.com/adelelawady/Clipify/issues)
-- Documentation: [Wiki](https://github.com/adelelawady/Clipify/wiki)
+- Documentation: [Wiki](https://github.com/adelelawady/Clipify)
 
 ## 🙏 Acknowledgments
 
