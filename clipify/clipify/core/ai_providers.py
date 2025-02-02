@@ -188,7 +188,11 @@ class OllamaProvider(AIProvider):
         "default": "llama2"
     }
     
-    def __init__(self, model="default", max_tokens=2048, temperature=0.7):
+    def __init__(self, api_key, model="default", max_tokens=2048, temperature=0.7):
+        """Initialize Ollama provider
+        
+        Note: api_key is ignored since Ollama runs locally
+        """
         self.url = "http://localhost:11434/api/chat"
         self.model = model
         self.max_tokens = max_tokens
