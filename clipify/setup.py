@@ -5,25 +5,34 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 # Define requirements separately
 requirements = [
-    "numpy>=1.19.0",
-    "moviepy>=1.0.3",
-    "pydub>=0.25.1",
-    "textblob>=0.15.3",
-    "whisper>=1.0.0",
-    "requests>=2.25.1",
-    "ffmpeg-python>=0.2.0",
-    "tqdm>=4.60.0",
-    "python-dotenv>=0.17.0",
-    "typing-extensions>=3.7.4",
-    "pathlib>=1.0.1",
-    "opencv-python>=4.5.0",
-    "scipy>=1.6.0",
-    "captacity-clipify==0.3.2",
+    "numpy==1.24.3",
+    "Pillow==10.0.0",
+    "requests==2.31.0",
+    
+    # Video processing
+    "moviepy==1.0.3",
+    "opencv-python==4.8.0.74",
+    "ffmpeg-python==0.2.0",
+    "imageio==2.31.1",
+    "imageio-ffmpeg==0.4.8",
+    
+    # Audio processing
+    "pydub==0.25.1",
+    "openai-whisper==20231117",
+    
+    # ML/AI dependencies
+    "torch==2.6.0",
+    "torchaudio==2.6.0",
+    "torchvision==0.21.0",
+    "textblob==0.17.1",
+    
+    # Captioning
+    "captacity-clipify==0.3.4",
 ]
 
 setup(
     name="clipify",
-    version="2.0.1",
+    version="2.0.3",
     author="Adel Elawady",
     author_email="adel50ali50@gmail.com",
     description="A powerful tool for processing video content into social media-friendly segments",
