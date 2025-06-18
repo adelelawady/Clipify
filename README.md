@@ -12,7 +12,9 @@
 [![GitHub stars](https://img.shields.io/github/stars/adelelawady/Clipify.svg)](https://github.com/adelelawady/Clipify/stargazers)
 [![Documentation Status](https://img.shields.io/badge/docs-passing-brightgreen.svg)](https://github.com/adelelawady/Clipify#readme)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-
+<a href="https://pepy.tech/project/Clipify">
+    <img src="https://static.pepy.tech/badge/Clipify" alt="Downloads">
+  </a>
 ## 🌟 Key Features
 
 ### Content Processing
