@@ -2,7 +2,7 @@
 Clipify Usage Examples
 This file demonstrates various use cases of Clipify and its components.
 """
-
+import os
 from clipify.core.clipify import Clipify
 from clipify.audio.extractor import AudioExtractor
 from clipify.audio.speech import SpeechToText
@@ -19,13 +19,19 @@ def basic_clipify_example():
     print("\n=== Basic Clipify Example ===")
     
     # Initialize with basic configuration
+    # clipify = Clipify(
+    #     provider_name="hyperbolic",
+    #     api_key="api-key",
+    #     model="deepseek-ai/DeepSeek-V3",
+    #     convert_to_mobile=True,
+    #     add_captions=True
+    # )
     clipify = Clipify(
-        provider_name="hyperbolic",
-        api_key="api-key",
-        model="deepseek-ai/DeepSeek-V3",
-        convert_to_mobile=True,
-        add_captions=True
+        provider_name="google",
+        api_key=os.getenv("GOOGLE_API_KEY"),
+        model=os.getenv("GEMINI_MODEL", "gemini-1.5-flash"),
     )
+
 
     # Process a video file
     result = clipify.process_video("input.mp4")
@@ -50,7 +56,7 @@ def advanced_clipify_example():
         temperature=0.7,
         
         # Video Processing
-        convert_to_mobile=True,
+        convert_to_mobile=False,
         add_captions=True,
         mobile_ratio="9:16",
         
