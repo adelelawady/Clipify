@@ -45,8 +45,166 @@ def read_timings(tim_path: pathlib.Path):
     wt = data.get("word_timings") or []
     words = [Word(text=str(w["text"]), start=float(w["start"]), end=float(w["end"])) for w in wt]
     if not transcript or not words:
-        raise SystemExit(f"Need both 'transcript' and 'word_timings' in {tim_path}")
+        raise ValueError(f"Need both 'transcript' and 'word_timings' in {tim_path}")
     return transcript, words
+
+
+def _resolve_model(requested, api_key):
+    import google.generativeai as genai, os
+    genai.configure(api_key=api_key or os.getenv("GOOGLE_API_KEY"))
+    wanted = (requested or "").replace("models/", "")
+    # list all models that support generateContent
+    available = []
+    for m in genai.list_models():
+        if "generateContent" in getattr(m, "supported_generation_methods", []):
+            name = m.name.replace("models/","")
+            available.append(name)
+    if not available:
+        return requested  # fallback
+    # exact match?
+    if wanted in available:
+        return wanted
+    # prefix match (e.g., "gemini-1.5-flash" -> "gemini-1.5-flash-001")
+    for a in available:
+        if a.startswith(wanted):
+            return a
+    # last resort: first flash-like or first available
+    for a in available:
+        if "flash" in a:
+            return a
+    return available[0]
+
+
+def _extract_text_from_resp(resp):
+    """
+    Return plain text from a Gemini response.
+    Falls back to concatenating content parts if .text is empty.
+    """
+    try:
+        txt = (resp.text or "").strip()
+        if txt:
+            return txt
+    except Exception:
+        pass
+    # Try to collect parts text
+    try:
+        for cand in getattr(resp, "candidates", []) or []:
+            parts = getattr(getattr(cand, "content", None), "parts", []) or []
+            buf = []
+            for part in parts:
+                # part.text on modern SDKs; fallback to .inline_data / .function_call if present
+                t = getattr(part, "text", None)
+                if t:
+                    buf.append(t)
+            if buf:
+                return "\n".join(buf).strip()
+    except Exception:
+        pass
+    return ""
+
+def _raise_if_blocked(resp):
+    # If the model blocked output, raise a readable error for the UI.
+    try:
+        for cand in getattr(resp, "candidates", []) or []:
+            fr = getattr(cand, "finish_reason", None)
+            # finish_reason enums: STOP=1, SAFETY=2 (varies by SDK), LENGTH=3, ...
+            if fr is not None and int(fr) != 1:
+                # collect safety labels if available
+                ratings = getattr(cand, "safety_ratings", []) or []
+                labels = [getattr(r, "category", "unknown") for r in ratings]
+                raise ValueError(f"Gemini did not return usable text (finish_reason={fr}). Safety labels: {labels}")
+    except Exception:
+        # ignore introspection issues
+        pass
+
+
+
+def _extract_text_from_resp(resp):
+    # Try quick accessor
+    try:
+        txt = (resp.text or "").strip()
+        if txt:
+            return txt
+    except Exception:
+        pass
+    # Scan parts
+    try:
+        for cand in getattr(resp, "candidates", []) or []:
+            content = getattr(cand, "content", None)
+            parts = getattr(content, "parts", []) if content else []
+            buf=[]
+            for part in parts or []:
+                t = getattr(part, "text", None)
+                if t:
+                    buf.append(t)
+            if buf:
+                return "\n".join(buf).strip()
+    except Exception:
+        pass
+    return ""
+
+def _is_blocked(resp):
+    try:
+        for cand in getattr(resp, "candidates", []) or []:
+            fr = getattr(cand, "finish_reason", None)
+            # STOP=1 on most SDKs
+            if fr is None:
+                continue
+            if int(fr) != 1:
+                return True
+    except Exception:
+        pass
+    return False
+
+def _summarize_resp_for_log(resp, limit=600):
+    try:
+        import json
+        compact = {
+            "candidates": [
+                {
+                    "finish_reason": getattr(c, "finish_reason", None),
+                    "has_parts": bool(getattr(getattr(c, "content", None), "parts", []) or []),
+                    "safety_ratings": [getattr(r, "category", "unknown") for r in getattr(c, "safety_ratings", []) or []],
+                } for c in getattr(resp, "candidates", []) or []
+            ]
+        }
+        s = json.dumps(compact)[:limit]
+        return s
+    except Exception:
+        return "<unprintable response>"
+
+def _fallback_highlights_from_text(full_text, k=6, min_words=8, max_words=24):
+    import re
+    # crude sentence split
+    sents = re.split(r"(?<=[.!?])\s+", full_text.strip())
+    hs=[]
+    for s in sents:
+        w = re.findall(r"\S+", s)
+        if len(w) < min_words:
+            continue
+        if len(w) > max_words:
+            s = " ".join(w[:max_words])
+        title = (s[:60] + "…") if len(s) > 60 else s
+        hs.append({"title": title or "Highlight", "excerpt": s})
+        if len(hs) >= k:
+            break
+    # if nothing matched, take head of transcript
+    if not hs and full_text:
+        w = re.findall(r"\S+", full_text)
+        chunk = " ".join(w[:max_words]) if len(w)>max_words else full_text
+        hs = [{"title":"Highlight 1","excerpt":chunk}]
+    return hs
+
+
+SAFETY_NONE = [
+    {"category":"HARM_CATEGORY_DANGEROUS","threshold":"BLOCK_NONE"},
+    {"category":"HARM_CATEGORY_HARASSMENT","threshold":"BLOCK_NONE"},
+    {"category":"HARM_CATEGORY_HATE_SPEECH","threshold":"BLOCK_NONE"},
+    {"category":"HARM_CATEGORY_SEXUAL_CONTENT","threshold":"BLOCK_NONE"},
+    {"category":"HARM_CATEGORY_VIOLENCE","threshold":"BLOCK_NONE"},
+]
+
+
 
 def call_gemini(full_text: str, *, clips: int, min_words: int, max_words: int, model: str, api_key: str):
     import google.generativeai as genai
@@ -63,16 +221,25 @@ JSON schema example:
 {{"highlights":[{{"title":"...", "excerpt":"..."}}]}}
 
 Transcript:
-\"\"\"{full_text[:20000]}\"\"\"
+\"\"\"{full_text[:16000]}\"\"\"
 """.strip()
-    resp = gmodel.generate_content(prompt, generation_config={"temperature":0.4, "max_output_tokens": 1200})
-    txt = (resp.text or "").strip()
+    resp = gmodel.generate_content(
+        prompt,
+        generation_config={"temperature":0.4, "max_output_tokens": 1200},
+        safety_settings=SAFETY_NONE
+    )
+    if _is_blocked(resp):
+        # fallback instead of error
+        return _fallback_highlights_from_text(full_text, k=clips, min_words=min_words, max_words=max_words)
+    txt = _extract_text_from_resp(resp)
+    if not txt:
+        return _fallback_highlights_from_text(full_text, k=clips, min_words=min_words, max_words=max_words)
     try:
         obj = json.loads(txt)
     except Exception:
         m = re.search(r'\{.*\}', txt, flags=re.S)
         if not m:
-            raise SystemExit("Gemini did not return JSON.\nRaw:\n" + txt)
+            raise ValueError("Gemini did not return JSON.\nRaw:\n" + txt)
         obj = json.loads(m.group(0))
     highs = obj.get("highlights") or []
     cleaned = []
