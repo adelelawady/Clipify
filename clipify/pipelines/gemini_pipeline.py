@@ -1,401 +1,456 @@
-# (file content starts)
-import os, json, re, unicodedata, argparse, pathlib, subprocess, shlex, sys
-from dataclasses import dataclass
+# -*- coding: utf-8 -*-
+"""
+Clean Gemini → Align → SRT helpers.
+One stable entrypoint: call_gemini(...)
+"""
+
+import os
+import json
+import re
+import unicodedata
+from typing import List, Tuple, Optional, Dict, Any
 from pathlib import Path as _P
-from dotenv import load_dotenv as _load
-ENV_PATH = (_P(__file__).resolve().parents[2] / '.env')
-_load(dotenv_path=ENV_PATH, override=False)
 
-from typing import List, Optional, Tuple
-
+# Optional fuzzy
 try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except Exception:
-    pass
-
-try:
-    from rapidfuzz import process as rf_process, fuzz as rf_fuzz  # noqa: F401
+    from rapidfuzz import fuzz as rf_fuzz
     HAVE_RAPIDFUZZ = True
 except Exception:
-    import difflib  # noqa: F401
+    import difflib
     HAVE_RAPIDFUZZ = False
 
-@dataclass
-class Word:
-    text: str
-    start: float
-    end: float
+# -------------------------
+# Utils
+# -------------------------
 
-@dataclass
-class Segment:
-    title: str
-    start: float
-    end: float
-
-def norm(s: str) -> str:
+def _normalize(s: str) -> str:
     s = s.lower()
     s = "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
     s = re.sub(r"[\s]+", " ", s)
     return s.strip()
 
-def read_timings(tim_path: pathlib.Path):
-    data = json.loads(tim_path.read_text())
-    transcript = data.get("transcript", "").strip()
-    wt = data.get("word_timings") or []
-    words = [Word(text=str(w["text"]), start=float(w["start"]), end=float(w["end"])) for w in wt]
-    if not transcript or not words:
-        raise ValueError(f"Need both 'transcript' and 'word_timings' in {tim_path}")
-    return transcript, words
+def _get_env_key() -> Optional[str]:
+    return os.getenv("GOOGLE_API_KEY")
 
+def _get_env_model(default="gemini-2.5-flash") -> str:
+    m = (os.getenv("GEMINI_MODEL") or "").strip()
+    return m or default
 
-def _resolve_model(requested, api_key):
-    import google.generativeai as genai, os
-    genai.configure(api_key=api_key or os.getenv("GOOGLE_API_KEY"))
-    wanted = (requested or "").replace("models/", "")
-    # list all models that support generateContent
-    available = []
-    for m in genai.list_models():
-        if "generateContent" in getattr(m, "supported_generation_methods", []):
-            name = m.name.replace("models/","")
-            available.append(name)
-    if not available:
-        return requested  # fallback
-    # exact match?
-    if wanted in available:
-        return wanted
-    # prefix match (e.g., "gemini-1.5-flash" -> "gemini-1.5-flash-001")
-    for a in available:
-        if a.startswith(wanted):
-            return a
-    # last resort: first flash-like or first available
-    for a in available:
-        if "flash" in a:
-            return a
-    return available[0]
+def _json_from_text(txt: str) -> Optional[dict]:
+    txt = (txt or "").strip()
+    if not txt:
+        return None
+    try:
+        return json.loads(txt)
+    except Exception:
+        m = re.search(r'\{.*\}', txt, flags=re.S)
+        if m:
+            try:
+                return json.loads(m.group(0))
+            except Exception:
+                return None
+    return None
 
+# -------------------------
+# Timings & tokens
+# -------------------------
 
-def _extract_text_from_resp(resp):
+def read_timings(timings_path: str) -> Tuple[str, List[Dict[str, Any]]]:
     """
-    Return plain text from a Gemini response.
-    Falls back to concatenating content parts if .text is empty.
+    Returns (transcript:str, word_timings:[{'text','start','end'}])
+    Supports shapes:
+      {"transcript": "...", "word_timings":[...]}
+      {"words":[...]}
+      {"segments":[{"words":[...]}, ...]}
+      or direct list of words
     """
+    tpath = _P(timings_path)
+    if not tpath.exists():
+        raise FileNotFoundError(f"Timings JSON not found: {tpath}")
     try:
-        txt = (resp.text or "").strip()
-        if txt:
-            return txt
-    except Exception:
-        pass
-    # Try to collect parts text
-    try:
-        for cand in getattr(resp, "candidates", []) or []:
-            parts = getattr(getattr(cand, "content", None), "parts", []) or []
-            buf = []
-            for part in parts:
-                # part.text on modern SDKs; fallback to .inline_data / .function_call if present
-                t = getattr(part, "text", None)
-                if t:
-                    buf.append(t)
-            if buf:
-                return "\n".join(buf).strip()
-    except Exception:
-        pass
-    return ""
+        data = json.loads(tpath.read_text())
+    except Exception as e:
+        raise ValueError(f"Invalid JSON at {tpath}: {e}")
 
-def _raise_if_blocked(resp):
-    # If the model blocked output, raise a readable error for the UI.
-    try:
-        for cand in getattr(resp, "candidates", []) or []:
-            fr = getattr(cand, "finish_reason", None)
-            # finish_reason enums: STOP=1, SAFETY=2 (varies by SDK), LENGTH=3, ...
-            if fr is not None and int(fr) != 1:
-                # collect safety labels if available
-                ratings = getattr(cand, "safety_ratings", []) or []
-                labels = [getattr(r, "category", "unknown") for r in ratings]
-                raise ValueError(f"Gemini did not return usable text (finish_reason={fr}). Safety labels: {labels}")
-    except Exception:
-        # ignore introspection issues
-        pass
+    transcript = ""
+    words_raw: List[dict] = []
 
+    if isinstance(data, dict):
+        transcript = (data.get("transcript") or "").strip()
+        if isinstance(data.get("word_timings"), list):
+            words_raw = data["word_timings"]
+        elif isinstance(data.get("words"), list):
+            words_raw = data["words"]
+        elif isinstance(data.get("segments"), list):
+            for seg in data["segments"]:
+                if isinstance(seg, dict) and isinstance(seg.get("words"), list):
+                    words_raw.extend(seg["words"])
+    elif isinstance(data, list):
+        if data and isinstance(data[0], dict):
+            if {"text","start","end"}.issubset(set(data[0].keys())):
+                words_raw = data
+            else:
+                for item in data:
+                    if isinstance(item, dict) and isinstance(item.get("words"), list):
+                        words_raw.extend(item["words"])
 
+    word_timings: List[Dict[str, Any]] = []
+    for w in words_raw:
+        txt = str(w.get("text") or w.get("word") or "")
+        s = w.get("start"); e = w.get("end")
+        if s is None or e is None:
+            continue
+        try:
+            word_timings.append({"text": txt, "start": float(s), "end": float(e)})
+        except Exception:
+            continue
 
-def _extract_text_from_resp(resp):
-    # Try quick accessor
-    try:
-        txt = (resp.text or "").strip()
-        if txt:
-            return txt
-    except Exception:
-        pass
-    # Scan parts
-    try:
-        for cand in getattr(resp, "candidates", []) or []:
-            content = getattr(cand, "content", None)
-            parts = getattr(content, "parts", []) if content else []
+    if not transcript:
+        alt_txt = tpath.parent / "input_transcript.txt"
+        if alt_txt.exists():
+            transcript = alt_txt.read_text().strip()
+        elif word_timings:
+            transcript = " ".join(w["text"] for w in word_timings)
+
+    return transcript, word_timings
+
+def tokens_from_words(words: List[dict]) -> List[dict]:
+    tokens=[]
+    for w in words:
+        txt = str(w.get("text") or "")
+        s   = w.get("start"); e = w.get("end")
+        if s is None or e is None:
+            continue
+        tokens.append({"txt": txt, "n": _normalize(txt), "start": float(s), "end": float(e)})
+    return tokens
+
+# -------------------------
+# Align excerpt
+# -------------------------
+
+def align_excerpt_exact_or_fuzzy(excerpt: str,
+                                 tokens: List[dict],
+                                 use_fuzzy: bool = False) -> Optional[Tuple[float,float]]:
+    """
+    Try exact normalized token matching first (phrase windows 5..12).
+    If not found and use_fuzzy=True, pick best fuzzy window.
+    Returns (start_time, end_time) in seconds or None.
+    """
+    if not excerpt or not tokens:
+        return None
+
+    tgt = _normalize(excerpt)
+    if not tgt:
+        return None
+
+    norms = [t["n"] for t in tokens]
+    tgt_words = tgt.split()
+    if len(tgt_words) < 3:
+        return None
+
+    # Exact sliding window
+    for L in range(min(12, len(tgt_words)), 4, -1):
+        for i in range(0, len(tgt_words)-L+1):
+            phrase = " ".join(tgt_words[i:i+L])
             buf=[]
-            for part in parts or []:
-                t = getattr(part, "text", None)
-                if t:
-                    buf.append(t)
-            if buf:
-                return "\n".join(buf).strip()
-    except Exception:
-        pass
-    return ""
+            for idx, w in enumerate(norms):
+                buf.append(w)
+                if len(buf)>L: buf.pop(0)
+                if len(buf)==L and " ".join(buf)==phrase:
+                    s_idx = idx-L+1
+                    e_idx = min(len(tokens)-1, idx + (len(tgt_words)-L) + 1)
+                    return (tokens[s_idx]["start"], tokens[e_idx]["end"])
 
-def _is_blocked(resp):
-    try:
-        for cand in getattr(resp, "candidates", []) or []:
-            fr = getattr(cand, "finish_reason", None)
-            # STOP=1 on most SDKs
-            if fr is None:
-                continue
-            if int(fr) != 1:
-                return True
-    except Exception:
-        pass
-    return False
+    if not use_fuzzy:
+        return None
 
-def _summarize_resp_for_log(resp, limit=600):
-    try:
-        import json
-        compact = {
-            "candidates": [
-                {
-                    "finish_reason": getattr(c, "finish_reason", None),
-                    "has_parts": bool(getattr(getattr(c, "content", None), "parts", []) or []),
-                    "safety_ratings": [getattr(r, "category", "unknown") for r in getattr(c, "safety_ratings", []) or []],
-                } for c in getattr(resp, "candidates", []) or []
-            ]
-        }
-        s = json.dumps(compact)[:limit]
-        return s
-    except Exception:
-        return "<unprintable response>"
+    # Fuzzy window search
+    best = (0.0, None)  # (score, (s_time, e_time))
+    tgt_join = " ".join(tgt_words[:50])
+    N = len(norms)
+    window = min(20, max(8, len(tgt_words)))
+    step = max(1, window // 2)
+    def score(a, b):
+        if HAVE_RAPIDFUZZ:
+            return rf_fuzz.token_set_ratio(a, b)
+        else:
+            return int(difflib.SequenceMatcher(None, a, b).ratio()*100)
 
-def _fallback_highlights_from_text(full_text, k=6, min_words=8, max_words=24):
-    import re
-    # crude sentence split
-    sents = re.split(r"(?<=[.!?])\s+", full_text.strip())
-    hs=[]
-    for s in sents:
+    for i in range(0, max(1, N-window+1), step):
+        candidate = " ".join(norms[i:i+window])
+        sc = score(tgt_join, candidate)
+        if sc > best[0]:
+            s_time = tokens[i]["start"]
+            e_time = tokens[min(N-1, i+window-1)]["end"]
+            best = (sc, (s_time, e_time))
+
+    if best[1] and best[0] >= 70:
+        return best[1]
+    return None
+
+# -------------------------
+# Build SRTs
+# -------------------------
+
+def _to_srt_time(t: float) -> str:
+    if t < 0: t = 0.0
+    h = int(t//3600); t-=h*3600
+    m = int(t//60);   t-=m*60
+    s = int(t);       ms = int(round((t-s)*1000))
+    return f"{h:02}:{m:02}:{s:02},{ms:03}"
+
+def build_srts(segments: List[dict],
+               word_timings: List[dict],
+               out_dir: str) -> List[_P]:
+    """
+    Creates segment_i.srt files based on word timings or titles fallback.
+    """
+    outp = _P(out_dir)
+    outp.mkdir(parents=True, exist_ok=True)
+
+    tokens = tokens_from_words(word_timings) if word_timings else []
+    srts=[]
+    for idx, seg in enumerate(segments, start=1):
+        start = seg.get("start"); end = seg.get("end")
+        title = seg.get("title") or f"segment_{idx}"
+        p = outp / f"segment_{idx}.srt"
+        cues=[]
+
+        if start is None or end is None:
+            # one-line fallback
+            cues=[(0.0, 2.0, title)]
+        else:
+            if tokens:
+                ws = [t for t in tokens if start <= t["start"] <= end]
+                if ws:
+                    line, lstart = [], None
+                    lend=0.0
+                    for w in ws:
+                        if not line: lstart = max(0.0, w["start"]-start)
+                        line.append(w["txt"]); lend = max(0.0, w["end"]-start)
+                        if len(line) >= 8:
+                            cues.append((lstart,lend," ".join(line)))
+                            line, lstart = [], None
+                    if line:
+                        cues.append((lstart,lend," ".join(line)))
+            if not cues:
+                dur = max(0.5, float(end)-float(start))
+                cues=[(0.0, dur, title)]
+
+        lines=[]
+        for i,(a,b,txt) in enumerate(cues, start=1):
+            lines.append(str(i))
+            lines.append(f"{_to_srt_time(a)} --> {_to_srt_time(b)}")
+            lines.append(txt or title); lines.append("")
+        p.write_text("\n".join(lines), encoding="utf-8")
+        srts.append(p)
+    return srts
+
+# -------------------------
+# Fallback Highlights (strong)
+# -------------------------
+
+def _fallback_highlights_from_text(full_text: str,
+                                   k=6,
+                                   min_words=8,
+                                   max_words=18) -> List[dict]:
+    """
+    Deterministic fallback when Gemini returns nothing/blocked:
+    - Try sentence-based picks with min_words..max_words
+    - If not enough, chunk the transcript by words evenly to produce k items.
+    Always returns <= k items (may return fewer if not enough words).
+    """
+    if not full_text:
+        return []
+    words_all = re.findall(r"\S+", full_text)
+    if len(words_all) < min_words:
+        return []
+
+    highlights=[]
+
+    # Sentence pass
+    parts = re.split(r'(?<=[\.!?])\s+', full_text.strip())
+    parts = [s.strip() for s in parts if s.strip()]
+    for s in parts:
         w = re.findall(r"\S+", s)
         if len(w) < min_words:
             continue
-        if len(w) > max_words:
-            s = " ".join(w[:max_words])
-        title = (s[:60] + "…") if len(s) > 60 else s
-        hs.append({"title": title or "Highlight", "excerpt": s})
-        if len(hs) >= k:
+        excerpt = " ".join(w[:max_words])
+        title   = " ".join(w[:8])
+        highlights.append({"title": title[:80], "excerpt": excerpt})
+        if len(highlights) >= k:
             break
-    # if nothing matched, take head of transcript
-    if not hs and full_text:
-        w = re.findall(r"\S+", full_text)
-        chunk = " ".join(w[:max_words]) if len(w)>max_words else full_text
-        hs = [{"title":"Highlight 1","excerpt":chunk}]
-    return hs
 
+    # Chunk pass if needed
+    if len(highlights) < k and words_all:
+        step = max(min_words, len(words_all)//max(1, k))
+        i = 0
+        while len(highlights) < k and i < len(words_all):
+            chunk = words_all[i:i+max_words]
+            if len(chunk) >= min_words:
+                seg = " ".join(chunk)
+                t   = " ".join(chunk[:8])
+                highlights.append({"title": t[:80], "excerpt": seg})
+            i += step
 
-SAFETY_NONE = [
-    {"category":"HARM_CATEGORY_DANGEROUS","threshold":"BLOCK_NONE"},
-    {"category":"HARM_CATEGORY_HARASSMENT","threshold":"BLOCK_NONE"},
-    {"category":"HARM_CATEGORY_HATE_SPEECH","threshold":"BLOCK_NONE"},
-    {"category":"HARM_CATEGORY_SEXUAL_CONTENT","threshold":"BLOCK_NONE"},
-    {"category":"HARM_CATEGORY_VIOLENCE","threshold":"BLOCK_NONE"},
-]
+    return highlights[:k]
 
+# -------------------------
+# Gemini core and wrapper
+# -------------------------
 
-
-def call_gemini(full_text: str, *, clips: int, min_words: int, max_words: int, model: str, api_key: str):
-    import google.generativeai as genai
-    genai.configure(api_key=api_key)
-    gmodel = genai.GenerativeModel(model)
-    prompt = f"""
-You are a video editor assistant. Given a speech transcript, choose the {clips} most compelling, self-contained highlights that would make engaging short clips for social media.
-
-Return ONLY valid JSON (no prose) with a list under key "highlights". Each highlight MUST have:
-- "title": a short, catchy title (max 70 chars)
-- "excerpt": a short exact excerpt (between {min_words} and {max_words} words) copied verbatim from the transcript that best represents the highlight.
-
-JSON schema example:
-{{"highlights":[{{"title":"...", "excerpt":"..."}}]}}
-
-Transcript:
-\"\"\"{full_text[:16000]}\"\"\"
-""".strip()
-    resp = gmodel.generate_content(
-        prompt,
-        generation_config={"temperature":0.4, "max_output_tokens": 1200},
-        safety_settings=SAFETY_NONE
-    )
-    if _is_blocked(resp):
-        # fallback instead of error
-        return _fallback_highlights_from_text(full_text, k=clips, min_words=min_words, max_words=max_words)
-    txt = _extract_text_from_resp(resp)
-    if not txt:
-        return _fallback_highlights_from_text(full_text, k=clips, min_words=min_words, max_words=max_words)
+def _call_gemini_core(full_text: str,
+                      clips=6,
+                      min_words=8,
+                      max_words=18,
+                      model=None,
+                      api_key=None,
+                      **_unused) -> dict:
+    """
+    Calls Gemini and returns dict: {"highlights":[{"title","excerpt"}, ...]}
+    Raises on block/invalid/empty.
+    """
+    if not full_text:
+        return {"highlights":[]}
     try:
-        obj = json.loads(txt)
-    except Exception:
-        m = re.search(r'\{.*\}', txt, flags=re.S)
-        if not m:
-            raise ValueError("Gemini did not return JSON.\nRaw:\n" + txt)
-        obj = json.loads(m.group(0))
-    highs = obj.get("highlights") or []
-    cleaned = []
-    for h in highs:
-        title = (h.get("title") or "").strip()
-        excerpt = (h.get("excerpt") or "").strip()
-        if title and excerpt:
-            cleaned.append({"title": title[:80], "excerpt": excerpt})
-    return cleaned
+        import google.generativeai as genai
+    except Exception as e:
+        raise RuntimeError("google-generativeai SDK missing") from e
 
-def tokens_from_words(words: List[Word]):
-    return [{"txt": w.text, "n": norm(w.text), "start": w.start, "end": w.end} for w in words]
+    key = api_key or _get_env_key()
+    if not key:
+        raise RuntimeError("Missing GOOGLE_API_KEY in env/.env")
+    genai.configure(api_key=key)
+    mdl = model or _get_env_model()
 
-def align_excerpt_exact_or_fuzzy(excerpt: str, tokens, *, use_fuzzy: bool):
-    tgt = norm(excerpt)
-    tgt_words = [p for p in tgt.split() if p]
-    if len(tgt_words) < 3:
-        return None
-    norms = [t["n"] for t in tokens]
-    min_len = min(5, len(tgt_words))
-    max_len = min(12, len(tgt_words))
-    for L in range(max_len, min_len-1, -1):
-        for i in range(0, len(tgt_words) - L + 1):
-            phrase = " ".join(tgt_words[i:i+L])
-            buf = []
-            for idx, w in enumerate(norms):
-                buf.append(w)
-                if len(buf) > L: buf.pop(0)
-                if len(buf) == L and " ".join(buf) == phrase:
-                    start_idx = idx - L + 1
-                    end_idx = min(len(tokens)-1, idx + (len(tgt_words)-L) + 1)
-                    s_time = tokens[start_idx]["start"]
-                    e_time = tokens[end_idx]["end"]
-                    if e_time > s_time:
-                        return (start_idx, end_idx, s_time, e_time)
-    if not use_fuzzy:
-        return None
-    # simple difflib-based rescue (best-effort)
-    full_norm = " ".join(norms)
-    import difflib
-    m = difflib.SequenceMatcher(None, full_norm, tgt)
-    block = max(m.get_matching_blocks(), key=lambda b: b.size)
-    if block.size < max(10, len(tgt)//6):
-        return None
-    left_tokens = len(full_norm[:block.a].split())
-    span_tokens = len(full_norm[block.a:block.a+block.size].split())
-    start_idx = max(0, left_tokens)
-    end_idx = min(len(tokens)-1, start_idx + span_tokens)
-    s_time = tokens[start_idx]["start"]
-    e_time = tokens[end_idx]["end"]
-    if e_time > s_time:
-        return (start_idx, end_idx, s_time, e_time)
-    return None
-
-def write_processed_segments(out_path: pathlib.Path, segments: List[Segment]):
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"segments": [dict(title=s.title, start=round(s.start,3), end=round(s.end,3)) for s in segments]}
-    out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
-
-def build_srts(proc_path: pathlib.Path, tim_path: pathlib.Path, out_dir: pathlib.Path, words: List[Word]):
-    out_dir.mkdir(parents=True, exist_ok=True)
-    proc = json.loads(proc_path.read_text())
-    def to_srt_time(t):
-        if t < 0: t = 0.0
-        h = int(t//3600); t-=h*3600
-        m = int(t//60);   t-=m*60
-        s = int(t);       ms = int(round((t-s)*1000))
-        return f"{h:02}:{m:02}:{s:02},{ms:03}"
-    for idx, seg in enumerate(proc.get("segments", []), start=1):
-        start = float(seg["start"]); end = float(seg["end"])
-        ws = [w for w in words if start <= w.start <= end]
-        cues=[]; line=[]; lstart=None; lend=0.0
-        for w in ws:
-            s = w.start - start; e = w.end - start
-            if not line: lstart = max(0.0, s)
-            line.append(w.text); lend = max(0.0, e)
-            if len(line) >= 8:
-                cues.append((lstart, lend, " ".join(line))); line=[]; lstart=None
-        if line: cues.append((lstart, lend, " ".join(line)))
-        if not cues: cues=[(0.0, max(0.5, end-start), seg.get('title') or f"segment_{idx}")]
-        lines=[]
-        for i,(a,b,txt) in enumerate(cues, start=1):
-            lines += [str(i), f"{to_srt_time(a)} --> {to_srt_time(b)}", txt, ""]
-        (out_dir / f"segment_{idx}.srt").write_text("\n".join(lines), encoding="utf-8")
-
-def cut_and_burn(input_video: pathlib.Path, proc_path: pathlib.Path, srt_dir: pathlib.Path, out_dir: pathlib.Path):
-    out_dir.mkdir(parents=True, exist_ok=True)
-    proc = json.loads(proc_path.read_text())
-    for idx, seg in enumerate(proc.get("segments", []), start=1):
-        start = float(seg["start"]); end = float(seg["end"]); dur = max(0.01, end - start)
-        title = (seg.get("title") or f"segment_{idx}").replace("/", "-")
-        raw_out = out_dir / f"segment_{idx}_{title}.mp4"
-        sub_out = out_dir / f"segment_{idx}_{title}_subtitled.mp4"
-        srt = srt_dir / f"segment_{idx}.srt"
-        cut = ["ffmpeg","-y","-ss",str(start),"-t",str(dur),"-i",str(input_video),
-               "-map","0:v:0","-map","0:a:0?","-c:v","libx264","-c:a","aac","-b:a","192k",
-               "-movflags","+faststart",str(raw_out)]
-        print("Cut:", " ".join(shlex.quote(c) for c in cut))
-        subprocess.run(cut, check=False)
-        if srt.exists():
-            vf = f"subtitles=filename='{srt.as_posix()}'"
-            sub = ["ffmpeg","-y","-i",str(raw_out),"-vf",vf,
-                   "-map","0:v:0","-map","0:a:0?","-c:v","libx264","-c:a","aac","-b:a","192k",
-                   "-movflags","+faststart","-shortest",str(sub_out)]
-            print("Subs:", " ".join(shlex.quote(c) for c in sub))
-            subprocess.run(sub, check=False)
-
-def main():
-    ap = argparse.ArgumentParser(description="Gemini → Align → Cut → Burn pipeline")
-    ap.add_argument("--input-video", default="input.mp4")
-    ap.add_argument("--timings", default="transcripts/input_timings.json")
-    ap.add_argument("--processed-out", default="processed_content/input_processed.json")
-    ap.add_argument("--segments-dir", default="segmented_videos/input")
-    ap.add_argument("--clips", type=int, default=8)
-    ap.add_argument("--min-words", type=int, default=10)
-    ap.add_argument("--max-words", type=int, default=25)
-    ap.add_argument("--model", default=os.getenv("GEMINI_MODEL","gemini-1.5-flash"))
-    ap.add_argument("--fuzzy", action="store_true")
-    ap.add_argument("--google-api-key", default=os.getenv("GOOGLE_API_KEY"))
-    args = ap.parse_args()
-
-    if not args.google_api_key:
-        print("ERROR: set GOOGLE_API_KEY or pass --google-api-key", file=sys.stderr)
-        sys.exit(2)
-
-    transcript, words = read_timings(pathlib.Path(args.timings))
-    highs = call_gemini(
-        transcript,
-        clips=args.clips, min_words=args.min_words, max_words=args.max_words,
-        model=args.model, api_key=args.google_api_key,
+    prompt = (
+        f"You are a video shorts editor.\n"
+        f"Given a speech transcript, pick the {clips} most compelling highlights for social media.\n\n"
+        f"Return ONLY valid JSON with a single key \"highlights\": a list where each item has:\n"
+        f"- \"title\": a catchy title (<= 70 chars)\n"
+        f"- \"excerpt\": exact words copied from the transcript, between {min_words} and {max_words} words.\n\n"
+        f"Example:\n"
+        f"{{\"highlights\":[{{\"title\":\"...\",\"excerpt\":\"...\"}}]}}\n\n"
+        f"Transcript:\n"
+        f"{full_text[:20000]}"
     )
-    tokens = tokens_from_words(words)
-    aligned: List[Segment] = []
-    skipped = 0
-    for h in highs:
-        hit = align_excerpt_exact_or_fuzzy(h["excerpt"], tokens, use_fuzzy=args.fuzzy)
-        if not hit:
-            skipped += 1; continue
-        si, ei, s, e = hit
-        aligned.append(Segment(title=h["title"], start=s, end=e))
 
-    if not aligned:
-        print("No highlights could be aligned. Try --fuzzy and/or adjust --min-words/--max-words.", file=sys.stderr)
-        sys.exit(1)
+    gmodel = genai.GenerativeModel(mdl)
+    resp   = gmodel.generate_content(prompt, generation_config={"temperature":0.4, "max_output_tokens":1400})
 
-    proc_path = pathlib.Path(args.processed_out)
-    write_processed_segments(proc_path, aligned)
-    print(f"Wrote {proc_path} with {len(aligned)} segments (skipped {skipped}).")
+    txt = getattr(resp, "text", "") or ""
+    obj = _json_from_text(txt)
+    if not obj or not isinstance(obj, dict) or "highlights" not in obj:
+        # Could be blocked (finish_reason == 2)
+        try:
+            cands = getattr(resp, "candidates", []) or []
+            blocked = any(getattr(c, "finish_reason", None) == 2 for c in cands)
+        except Exception:
+            blocked = False
+        if blocked:
+            raise ValueError("Gemini blocked the output.")
+        raise ValueError("Gemini did not return valid JSON.")
 
-    srt_dir = pathlib.Path(args.segments_dir) / "srt"
-    build_srts(proc_path, pathlib.Path(args.timings), srt_dir, words)
-    print(f"Wrote SRTs to {srt_dir}")
+    highs_raw = obj.get("highlights") or []
+    cleaned=[]
+    for h in highs_raw:
+        if isinstance(h, dict):
+            title   = (h.get("title") or "").strip()
+            excerpt = (h.get("excerpt") or h.get("text") or "").strip()
+        else:
+            title   = str(h)[:80]
+            excerpt = str(h)
+        if excerpt:
+            cleaned.append({"title": title[:80] or excerpt[:50], "excerpt": excerpt})
+    return {"highlights": cleaned[:clips]}
 
-    cut_and_burn(pathlib.Path(args.input_video), proc_path, srt_dir, pathlib.Path(args.segments_dir))
-    print("Done.")
+def call_gemini(*args,
+                full_text=None,
+                transcript=None,
+                word_timings=None,
+                clips=6,
+                min_words=8,
+                max_words=18,
+                model=None,
+                api_key=None,
+                **kwargs) -> dict:
+    """
+    Public entrypoint used by CLI/UI.
+    Accepts full_text OR transcript; also accepts a positional str/dict for back-compat.
+    If core fails or returns empty, falls back to local highlights.
+    """
+    # Back-compat positional mapping
+    if args and full_text is None and transcript is None:
+        a0 = args[0]
+        if isinstance(a0, str):
+            full_text = a0
+        elif isinstance(a0, dict):
+            if a0.get("transcript"):
+                full_text = str(a0["transcript"])
+            elif a0.get("full_text"):
+                full_text = str(a0["full_text"])
+            elif a0.get("text"):
+                full_text = str(a0["text"])
 
-if __name__ == "__main__":
-    main()
-# (file content ends)
+    text = (full_text or transcript or "").strip()
+    if not text:
+        return {"highlights":[]}
+
+    # Try Gemini
+    try:
+        res = _call_gemini_core(full_text=text,
+                                clips=clips,
+                                min_words=min_words,
+                                max_words=max_words,
+                                model=model,
+                                api_key=api_key)
+        highs = res.get("highlights") or []
+        if highs:
+            return {"highlights": highs[:clips]}
+        # Empty → fallback
+        raise ValueError("Gemini returned empty highlights.")
+    except Exception:
+        highs = _fallback_highlights_from_text(text, k=clips,
+                                               min_words=min_words,
+                                               max_words=max_words)
+        return {"highlights": highs}
+
+# -------------------------
+# Write processed segments (for UI)
+# -------------------------
+
+def write_processed_segments(segments, out_path: str = "processed_content/input_processed.json"):
+    """
+    Persist segments to a JSON file the rest of the pipeline expects:
+    {
+      "segments": [
+        {"title": "...", "start": float|None, "end": float|None},
+        ...
+      ]
+    }
+    """
+    p = _P(out_path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+
+    norm = []
+    for i, s in enumerate(segments, 1):
+        if not isinstance(s, dict):
+            s = {"title": str(s), "start": None, "end": None}
+        title = (s.get("title") or f"segment_{i}").strip()
+        start = s.get("start")
+        end   = s.get("end")
+
+        try:
+            start = float(start) if start is not None else None
+        except Exception:
+            start = None
+        try:
+            end = float(end) if end is not None else None
+        except Exception:
+            end = None
+
+        norm.append({"title": title, "start": start, "end": end})
+
+    out = {"segments": norm}
+    p.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
+    return p

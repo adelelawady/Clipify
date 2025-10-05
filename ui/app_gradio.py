@@ -1,6 +1,27 @@
 import os, json, tempfile
 from pathlib import Path
 import gradio as gr
+
+def _normalize_highlights(res):
+    # Accept dict({highlights:[...]}) or raw list
+    if isinstance(res, dict):
+        highs = res.get('highlights') or []
+    elif isinstance(res, list):
+        highs = res
+    else:
+        highs = []
+    out=[]
+    for h in (highs.get('highlights', highs) if isinstance(highs, dict) else highs):
+        if isinstance(h, dict):
+            title   = (h.get('title') or '').strip()
+            excerpt = (h.get('excerpt') or h.get('text') or '').strip()
+        else:
+            title   = str(h)[:80]
+            excerpt = str(h)
+        if excerpt:
+            out.append({'title': title or excerpt[:50], 'excerpt': excerpt})
+    return {'highlights': out}
+
 from dotenv import load_dotenv
 import sys
 from pathlib import Path as _P
@@ -51,12 +72,12 @@ def run_pipeline(video_file, clips, min_words, max_words, model, fuzzy,
 
     tokens = tokens_from_words(words)
     segments = []
-    for h in highs:
-        hit = align_excerpt_exact_or_fuzzy(h["excerpt"], tokens, use_fuzzy=bool(fuzzy))
+    for h in (highs.get('highlights', highs) if isinstance(highs, dict) else highs):
+        hit = align_excerpt_exact_or_fuzzy((h.get("excerpt") if isinstance(h, dict) else str(h)), tokens, use_fuzzy=bool(fuzzy))
         if not hit:
             continue
         _, _, s, e = hit
-        segments.append({"title": h["title"][:80], "start": round(s,3), "end": round(e,3)})
+        segments.append({"title": (h.get("title") if isinstance(h, dict) else str(h)[:80])[:80], "start": round(s,3), "end": round(e,3)})
 
     if not segments:
         return "No highlights could be aligned. Try enabling fuzzy or adjusting min/max words.", None, []
