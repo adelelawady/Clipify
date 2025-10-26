@@ -15,6 +15,10 @@ requirements = [
     "setuptools==49.2.1",
     "textblob==0.17.1",
     "openai-whisper==20231117",
+    "google-generativeai",
+    "gradio",
+    "python-dotenv",
+    "rapidfuzz",
 ]
 
 setup(
@@ -35,4 +39,4 @@ setup(
     python_requires=">=3.8",
     install_requires=requirements,
     include_package_data=True,
-) 
+)

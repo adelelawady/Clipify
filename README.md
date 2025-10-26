@@ -346,6 +346,21 @@ clipify/
 - `anthropic`: Anthropic Claude models
 - `ollama`: Local model deployment
 
+### AI Provider Configuration (Gemini / OpenAI)
+
+You can choose which AI provider to use for highlight extraction. By default the UI and pipeline use Google Gemini, but OpenAI is also supported.
+
+- Environment variables (set in `.env`):
+  - `GOOGLE_API_KEY` — API key for Google Generative AI (Gemini).
+  - `OPENAI_API_KEY` — API key for OpenAI (if you want to use OpenAI models).
+  - `GEMINI_MODEL` — optional default Gemini model name (e.g. `gemini-2.5-flash`).
+  - `OPENAI_MODEL` — optional default OpenAI model name (e.g. `gpt-4o-mini`).
+  - `AI_PROVIDER` — optional default provider (`gemini` or `openai`). Defaults to `gemini`.
+
+- In the Gradio UI you can override the keys per-run by entering them in the Gemini/OpenAI API Key fields.
+
+The pipeline will attempt to use the selected provider and fall back to a simple deterministic highlight-picker if the provider fails.
+
 ### Video Formats
 - Aspect Ratios: `1:1`, `4:5`, `9:16`
 - Output Formats: MP4, MOV
@@ -383,6 +398,34 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - FFmpeg for video processing
+
+## 🔧 Getting started (local development)
+
+1. Copy `.env.example` to `.env` and fill in your API keys (do not commit `.env`):
+
+```bash
+cp .env.example .env
+# edit .env and add your keys
+```
+
+2. Create and activate a Python virtual environment, install deps:
+
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+3. Start the Gradio UI:
+
+```bash
+python ui/app_gradio.py
+```
+
+4. Open the app in your browser at http://127.0.0.1:7860 (or the port set in `GRADIO_SERVER_PORT`).
+
+5. Upload a video and press "Generate clips". The generated segments are written to `segmented_videos/input/` and processed output appears under `processed_videos/`.
+
 - OpenAI for AI capabilities
 - PyTorch community
 - All contributors and supporters
