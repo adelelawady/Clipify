@@ -305,6 +305,8 @@ def _call_gemini_core(full_text: str,
                       max_words=18,
                       model=None,
                       api_key=None,
+                      ai_provider_name: str = "gemini",
+                      provider_api_key: str = None,
                       **_unused) -> dict:
     """
     Calls Gemini and returns dict: {"highlights":[{"title","excerpt"}, ...]}
@@ -312,17 +314,7 @@ def _call_gemini_core(full_text: str,
     """
     if not full_text:
         return {"highlights":[]}
-    try:
-        import google.generativeai as genai
-    except Exception as e:
-        raise RuntimeError("google-generativeai SDK missing") from e
-
-    key = api_key or _get_env_key()
-    if not key:
-        raise RuntimeError("Missing GOOGLE_API_KEY in env/.env")
-    genai.configure(api_key=key)
-    mdl = model or _get_env_model()
-
+    # Build prompt
     prompt = (
         f"You are a video shorts editor.\n"
         f"Given a speech transcript, pick the {clips} most compelling highlights for social media.\n\n"
@@ -335,34 +327,80 @@ def _call_gemini_core(full_text: str,
         f"{full_text[:20000]}"
     )
 
-    gmodel = genai.GenerativeModel(mdl)
-    resp   = gmodel.generate_content(prompt, generation_config={"temperature":0.4, "max_output_tokens":1400})
+    # Use factory to obtain provider (keeps support for multiple providers)
+    try:
+        from clipify.core.ai_providers import get_ai_provider
+    except Exception:
+        # Fallback: try to import provider directly
+        get_ai_provider = None
 
-    txt = getattr(resp, "text", "") or ""
-    obj = _json_from_text(txt)
-    if not obj or not isinstance(obj, dict) or "highlights" not in obj:
-        # Could be blocked (finish_reason == 2)
-        try:
-            cands = getattr(resp, "candidates", []) or []
-            blocked = any(getattr(c, "finish_reason", None) == 2 for c in cands)
-        except Exception:
-            blocked = False
-        if blocked:
-            raise ValueError("Gemini blocked the output.")
-        raise ValueError("Gemini did not return valid JSON.")
+    provider_name = (ai_provider_name or "gemini").lower()
+    # Prefer explicit provider_api_key, then api_key param, then env
+    prov_key = provider_api_key or api_key
 
-    highs_raw = obj.get("highlights") or []
-    cleaned=[]
-    for h in highs_raw:
-        if isinstance(h, dict):
-            title   = (h.get("title") or "").strip()
-            excerpt = (h.get("excerpt") or h.get("text") or "").strip()
+    try:
+        if get_ai_provider:
+            prov = get_ai_provider(provider_name, prov_key, model)
+            resp = prov.get_response(prompt)
         else:
-            title   = str(h)[:80]
-            excerpt = str(h)
-        if excerpt:
-            cleaned.append({"title": title[:80] or excerpt[:50], "excerpt": excerpt})
-    return {"highlights": cleaned[:clips]}
+            # Last-resort: assume Gemini and call google.generativeai directly
+            import google.generativeai as genai
+            key = prov_key or _get_env_key()
+            if not key:
+                raise RuntimeError("Missing GOOGLE_API_KEY in env/.env")
+            genai.configure(api_key=key)
+            mdl = model or _get_env_model()
+            gmodel = genai.GenerativeModel(mdl)
+            resp = gmodel.generate_content(prompt, generation_config={"temperature":0.4, "max_output_tokens":1400})
+
+    except Exception as e:
+        raise
+
+    # Extract textual content from provider response
+    try:
+        # Many providers return a structure like {"choices": [{"message": {"content": "..."}}]}
+        txt = ""
+        if isinstance(resp, dict):
+            # openai-like
+            ch = resp.get("choices") or []
+            if ch and isinstance(ch, list):
+                first = ch[0]
+                if isinstance(first, dict):
+                    msg = first.get("message") or first
+                    if isinstance(msg, dict):
+                        txt = msg.get("content") or ""
+                    else:
+                        txt = msg
+        # Some clients return objects with .text
+        if not txt:
+            txt = getattr(resp, "text", "") or ""
+
+        obj = _json_from_text(txt)
+        if not obj or not isinstance(obj, dict) or "highlights" not in obj:
+            # Could be blocked — try to inspect candidates
+            try:
+                cands = getattr(resp, "candidates", []) or []
+                blocked = any(getattr(c, "finish_reason", None) == 2 for c in cands)
+            except Exception:
+                blocked = False
+            if blocked:
+                raise ValueError("AI provider blocked the output.")
+            raise ValueError("AI provider did not return valid JSON.")
+
+        highs_raw = obj.get("highlights") or []
+        cleaned=[]
+        for h in highs_raw:
+            if isinstance(h, dict):
+                title   = (h.get("title") or "").strip()
+                excerpt = (h.get("excerpt") or h.get("text") or "").strip()
+            else:
+                title   = str(h)[:80]
+                excerpt = str(h)
+            if excerpt:
+                cleaned.append({"title": title[:80] or excerpt[:50], "excerpt": excerpt})
+        return {"highlights": cleaned[:clips]}
+    except Exception:
+        raise
 
 def call_gemini(*args,
                 full_text=None,
