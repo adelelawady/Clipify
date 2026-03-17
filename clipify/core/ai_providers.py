@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 import requests
 import time
+from openai import OpenAI
+import google.generativeai as genai
 import os
 
 class AIProvider(ABC):
@@ -10,6 +12,54 @@ class AIProvider(ABC):
     def get_response(self, prompt, retry_count=3):
         """Get response from AI provider"""
         pass
+
+class GoogleGeminiProvider(AIProvider):
+    """Google Gemini provider implementation (Gemini API)"""
+
+    AVAILABLE_MODELS = {
+        "default": "gemini-1.5-flash",
+        "gemini-1.5-flash": "gemini-1.5-flash",
+        "gemini-1.5-pro": "gemini-1.5-pro",
+    }
+
+    def __init__(self, api_key, model="default", max_tokens=2048, temperature=0.7):
+        if not api_key:
+            raise ValueError("GOOGLE_API_KEY is not set.")
+        self.model = self.AVAILABLE_MODELS.get(model, model)
+        self.max_tokens = max_tokens
+        self.temperature = temperature
+        self.cache = {}
+        genai.configure(api_key=api_key)
+        self.client = genai.GenerativeModel(self.model)
+
+    def get_response(self, prompt, retry_count=3):
+        """Get response from Gemini with retry & caching; return OpenAI-like dict."""
+        if prompt in self.cache:
+            return self.cache[prompt]
+
+        last_err = None
+        for _ in range(retry_count):
+            try:
+                resp = self.client.generate_content(
+                    prompt,
+                    generation_config={
+                        "temperature": self.temperature,
+                        "max_output_tokens": self.max_tokens,
+                    },
+                )
+                text = (resp.text or "").strip()
+                if not text:
+                    raise ValueError("Invalid AI response")
+
+                result = {"choices": [{"message": {"content": text}}]}
+                self.cache[prompt] = result
+                return result
+
+            except Exception as e:
+                last_err = e
+                time.sleep(1)
+
+        raise last_err if last_err else RuntimeError("Unknown error in GoogleGeminiProvider")
 
 class HyperbolicAI(AIProvider):
     """Hyperbolic AI provider implementation"""
@@ -66,61 +116,73 @@ class HyperbolicAI(AIProvider):
         return None
 
 class OpenAIProvider(AIProvider):
-    """OpenAI provider implementation"""
-    
+    """OpenAI provider implementation (OpenAI SDK v1.x)"""
+
     AVAILABLE_MODELS = {
         "gpt-4": "gpt-4",
         "gpt-3.5-turbo": "gpt-3.5-turbo",
-        "gpt-4-turbo": "gpt-4-turbo-preview",
-        "default": "gpt-4"
+        "gpt-4-turbo": "gpt-4o-mini",  # modern lightweight 4-class model
+        "default": "gpt-4o-mini"
     }
-    
+
     def __init__(self, api_key, model="default", max_tokens=2048, temperature=0.7):
-        try:
-            import openai
-            self.openai = openai
-            self.openai.api_key = api_key
-        except ImportError:
-            raise ImportError("OpenAI package not installed. Install with: pip install openai")
-        self.model = model
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY is not set.")
+        # Normalize model name: allow keys from AVAILABLE_MODELS or a raw model string
+        resolved_model = self.AVAILABLE_MODELS.get(model, model)
+
+        self.client = OpenAI(api_key=api_key)
+        self.model = resolved_model
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.cache = {}
 
     def get_response(self, prompt, retry_count=3):
-        """Get response from OpenAI with retry mechanism and caching"""
+        """Get response from OpenAI with retry mechanism and caching."""
         if prompt in self.cache:
             return self.cache[prompt]
-            
-        for attempt in range(retry_count):
+
+        last_err = None
+        for _ in range(retry_count):
             try:
-                response = self.openai.ChatCompletion.create(
+                resp = self.client.chat.completions.create(
                     model=self.model,
                     messages=[
-                        {"role": "user", "content": prompt}
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": prompt},
                     ],
+                    max_tokens=self.max_tokens,
                     temperature=self.temperature,
-                    max_tokens=self.max_tokens
                 )
-                
-                # Convert OpenAI response format to match Hyperbolic format
+
+                # Safely read content
+                content = (
+                    resp.choices[0].message.content.strip()
+                    if resp and resp.choices and resp.choices[0].message and resp.choices[0].message.content
+                    else ""
+                )
+
+                if not content:
+                    raise ValueError("Invalid AI response")
+
+                # Convert to the structure the rest of the app expects
                 result = {
                     "choices": [{
                         "message": {
-                            "content": response.choices[0].message.content
+                            "content": content
                         }
                     }]
                 }
-                
+
                 self.cache[prompt] = result
                 return result
-                
+
             except Exception as e:
-                if attempt == retry_count - 1:
-                    raise e
+                last_err = e
                 time.sleep(1)
-                
-        return None
+
+        # If all retries failed, re-raise the last error
+        raise last_err if last_err else RuntimeError("Unknown error in OpenAIProvider")
 
 class AnthropicProvider(AIProvider):
     """Anthropic (Claude) provider implementation"""
@@ -264,9 +326,11 @@ def get_ai_provider(
         "hyperbolic": (HyperbolicAI, 5012, 0.7),
         "openai": (OpenAIProvider, 5048, 0.7),
         "anthropic": (AnthropicProvider, 5048, 0.7),
-        "ollama": (OllamaProvider, 2048, 0.7)
+        "ollama": (OllamaProvider, 2048, 0.7),
+        "google": (GoogleGeminiProvider, 2048, 0.7),
+        "gemini": (GoogleGeminiProvider, 2048, 0.7),
     }
-    
+
     provider_info = providers.get(provider_name.lower())
     if not provider_info:
         raise ValueError(f"Unknown AI provider: {provider_name}. Available providers: {', '.join(providers.keys())}")
