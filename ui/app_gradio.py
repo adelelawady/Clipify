@@ -213,6 +213,35 @@ def _score_excerpt(excerpt: str, start: float, end: float, total_duration: float
     return int(max(0, min(100, round(score * 100))))
 
 
+def _remux_audio(source_video: Path, target_video: Path) -> bool:
+    """Copy audio stream from source_video into target_video, preserving video.
+
+    Some captioning tools (e.g. captacity) drop the audio track. This helper
+    re-injects the original audio into the captioned output using ffmpeg.
+    """
+    import subprocess
+    tmp = target_video.with_suffix(".tmp" + target_video.suffix)
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", str(target_video),
+        "-i", str(source_video),
+        "-map", "0:v:0",
+        "-map", "1:a:0?",
+        "-c", "copy",
+        "-shortest",
+        str(tmp)
+    ]
+    try:
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        tmp.replace(target_video)
+        return True
+    except Exception as e:
+        logger.warning("Audio remux failed for %s: %s", target_video, e)
+        if tmp.exists():
+            tmp.unlink()
+        return False
+
+
 def run_pipeline(video_file, clips, min_words, max_words, model, openai_model, fuzzy,
                  font_name, font_size, primary_hex, outline_w, outline_hex, subtitle_style, position, aspect,
                  ai_provider_name, gemini_api_key, openai_api_key,
@@ -413,6 +442,11 @@ def run_pipeline(video_file, clips, min_words, max_words, model, openai_model, f
                 logger.warning("VideoProcessor reported failure for %s, falling back to ffmpeg ASS burn", raw_out)
                 raise RuntimeError("VideoProcessor failed to burn captions")
             logger.info("Primary captioning succeeded for segment %s -> %s", idx, sub_out)
+            # Re-inject original audio because some captioning tools drop it
+            if _remux_audio(raw_out, sub_out):
+                logger.info("Audio remuxed into %s", sub_out)
+            else:
+                logger.warning("Could not remux audio into %s", sub_out)
         except Exception:
             # Fallback to ffmpeg burning (ASS style)
             logger.exception("Primary captioning failed for segment %s, using ffmpeg ASS fallback", idx)
@@ -440,6 +474,12 @@ def run_pipeline(video_file, clips, min_words, max_words, model, openai_model, f
             except Exception:
                 logger.exception("ffmpeg_burn_subs failed for segment %s", idx)
                 raise
+
+        # Remux audio to preserve original audio track
+        try:
+            _remux_audio(REPO / "input.mp4", sub_out)
+        except Exception:
+            logger.warning("Audio remuxing failed for segment %s", idx)
 
         outputs.append(str(sub_out))
         scored_segments.append({"idx": s["idx"], "title": s["title"], "score": s["score"], "path": str(sub_out)})
