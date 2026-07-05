@@ -4,6 +4,7 @@ from .processor import ContentProcessor
 from .ai_providers import get_ai_provider
 from ..video.cutter import VideoCutter
 from ..video.processor import VideoProcessor
+from clipify.pipelines.ui_helpers import ffmpeg_burn_subs, css_hex_to_ass
 from ..video.converter import VideoConverter
 
 class Clipify:
@@ -109,13 +110,33 @@ class Clipify:
             return None
         
         print("\n=== Processing Results ===\n")
-        print(f"Video: {result['video_name']}")
-        print(f"Total Segments: {result['metadata']['total_segments']}")
+        # Be defensive: processed content may be from older format or missing keys
+        video_name_res = result.get('video_name') if isinstance(result, dict) else None
+        if not video_name_res:
+            video_name_res = video_name
+        metadata = result.get('metadata', {}) if isinstance(result, dict) else {}
+        total_segments = metadata.get('total_segments') if metadata else None
+        if total_segments is None:
+            total_segments = len(result.get('segments', [])) if isinstance(result, dict) else 0
+
+        print(f"Video: {video_name_res}")
+        print(f"Total Segments: {total_segments}")
         
         processed_segments = []
         print("\n=== Processing Video Segments ===\n")
         
-        for i, segment in enumerate(result['segments'], 1):
+        segments_list = result.get('segments') if isinstance(result, dict) else None
+        # Backwards-compat: some processed content uses 'start'/'end' instead of 'start_time'/'end_time'
+        for seg in (segments_list or []):
+            if 'start' in seg and 'start_time' not in seg:
+                seg['start_time'] = seg.get('start')
+            if 'end' in seg and 'end_time' not in seg:
+                seg['end_time'] = seg.get('end')
+        if not segments_list:
+            print("No segments found in processed result")
+            return None
+
+        for i, segment in enumerate(segments_list, 1):
             try:
                 if 'start_time' not in segment or 'end_time' not in segment:
                     print(f"Warning: Segment {i} missing timing information")
@@ -165,16 +186,43 @@ class Clipify:
                     if self.add_captions:
                         print(f"Processing segment #{i} with captions...")
                         output_processed = str(video_dirs['processed'] / f"segment_{i}_{clean_title}_captioned.mp4")
-                        process_result = self.video_processor.process_video(
-                            input_video=current_output,
-                            output_video=output_processed
-                        )
-                        
-                        if process_result:
-                            print(f"Successfully added captions to segment #{i}")
-                            segment_info['captioned_video'] = output_processed
-                        else:
-                            print(f"Failed to add captions to segment #{i}")
+                        try:
+                            process_result = self.video_processor.process_video(
+                                input_video=current_output,
+                                output_video=output_processed
+                            )
+
+                            if process_result:
+                                print(f"Successfully added captions to segment #{i}")
+                                segment_info['captioned_video'] = output_processed
+                            else:
+                                print(f"Failed to add captions to segment #{i}, attempting ffmpeg fallback")
+                                raise RuntimeError("Captioning tool failed")
+
+                        except Exception as e:
+                            # Fallback: burn SRT into the video using ffmpeg
+                            print(f"Captioning error for segment #{i}: {e}. Falling back to ffmpeg burn-in.")
+                            srt_dir = Path('segmented_videos') / video_name / 'srt'
+                            srt_file = srt_dir / f"segment_{i}.srt"
+                            if srt_file.exists():
+                                # Build a minimal style mapping from caption options
+                                style = {
+                                    "FontName": self.video_processor.font if self.video_processor else "Arial",
+                                    "FontSize": str(self.video_processor.font_size if self.video_processor else 40),
+                                    "PrimaryColour": css_hex_to_ass(self.video_processor.font_color if self.video_processor else "#FFFFFF"),
+                                    "OutlineColour": css_hex_to_ass(self.video_processor.stroke_color if self.video_processor else "#000000"),
+                                    "Outline": str(self.video_processor.stroke_width if self.video_processor else 2),
+                                    "BorderStyle": "3",
+                                    "Alignment": "2"
+                                }
+                                try:
+                                    ffmpeg_burn_subs(Path(current_output), srt_file, Path(output_processed), aspect=self.mobile_ratio, style=style)
+                                    print(f"Burned subtitles with ffmpeg for segment #{i}")
+                                    segment_info['captioned_video'] = output_processed
+                                except Exception as e2:
+                                    print(f"ffmpeg burn-in failed for segment #{i}: {e2}")
+                            else:
+                                print(f"No SRT found for segment #{i} at {srt_file}; cannot burn subtitles")
                     
                     processed_segments.append(segment_info)
                 else:
@@ -186,11 +234,11 @@ class Clipify:
         
         return {
             'video_path': video_path,
-            'video_name': video_name,
+            'video_name': video_name_res,
             'output_directories': {
                 'segmented': str(video_dirs['segmented']),
                 'processed': str(video_dirs['processed'])
             },
             'segments': processed_segments,
-            'metadata': result['metadata']
-        } 
+            'metadata': metadata
+        }

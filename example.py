@@ -3,6 +3,10 @@ Clipify Usage Examples
 This file demonstrates various use cases of Clipify and its components.
 """
 import os
+from dotenv import load_dotenv
+
+# Load .env into environment so example.py can read GOOGLE_API_KEY, GEMINI_MODEL, etc.
+load_dotenv()
 from clipify.core.clipify import Clipify
 from clipify.audio.extractor import AudioExtractor
 from clipify.audio.speech import SpeechToText

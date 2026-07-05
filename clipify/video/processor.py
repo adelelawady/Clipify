@@ -1,16 +1,21 @@
 import os
+import shutil
 from captacity_clipify import add_captions
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 class VideoProcessor:
     def __init__(self, 
+                 # Trending bold display font suitable for short-form captions
                  font: str = "Bangers-Regular.ttf",
+                 # Larger default for mobile short-form: 80 is a good baseline on 1080x1920
                  font_size: int = 60,
+                 # On-screen text color (white with dark stroke is highly legible)
                  font_color: str = "white",
-                 stroke_width: int = 2,
-                 stroke_color: str = "black",
+                 # Slightly thicker stroke for better contrast on mobile
+                 stroke_width: int = 3,
+                 stroke_color: str = "#111111",
                  highlight_current_word: bool = True,
-                 word_highlight_color: str = "red",
+                 word_highlight_color: str = "#FFCC00",  # trending accent (yellow/gold)
                  shadow_strength: float = 0.8,
                  shadow_blur: float = 0.08,
                  line_count: int = 1,
@@ -81,6 +86,22 @@ class VideoProcessor:
             output_dir = os.path.dirname(output_video)
             if output_dir and not os.path.exists(output_dir):
                 os.makedirs(output_dir)
+
+            # Pre-check captioning dependencies and provide clearer errors if missing
+            def _check_caption_deps() -> List[str]:
+                missing = []
+                # ImageMagick: either 'convert' (legacy) or 'magick'
+                if not (shutil.which('convert') or shutil.which('magick')):
+                    missing.append('ImageMagick (convert or magick)')
+                # ffmpeg is also required
+                if not shutil.which('ffmpeg'):
+                    missing.append('ffmpeg')
+                return missing
+
+            missing_deps = _check_caption_deps()
+            if missing_deps:
+                # Raise to allow caller to fallback to ffmpeg-based burning
+                raise RuntimeError(f"Missing caption dependencies: {', '.join(missing_deps)}")
 
             # Add captions to video using Captacity
             add_captions(

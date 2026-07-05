@@ -217,25 +217,38 @@ def build_srts(segments: List[dict],
         cues=[]
 
         if start is None or end is None:
-            # one-line fallback
+            # one-line fallback with full duration
             cues=[(0.0, 2.0, title)]
         else:
+            clip_duration = float(end) - float(start)
             if tokens:
+                # Find words that fall within this clip's time window
                 ws = [t for t in tokens if start <= t["start"] <= end]
                 if ws:
                     line, lstart = [], None
-                    lend=0.0
+                    lend = 0.0
                     for w in ws:
-                        if not line: lstart = max(0.0, w["start"]-start)
-                        line.append(w["txt"]); lend = max(0.0, w["end"]-start)
-                        if len(line) >= 8:
-                            cues.append((lstart,lend," ".join(line)))
+                        # Calculate timing relative to clip start, ensuring we don't go negative
+                        word_rel_start = max(0.0, w["start"] - float(start))
+                        word_rel_end = min(clip_duration, w["end"] - float(start))
+                        
+                        if not line:
+                            lstart = word_rel_start
+                        line.append(w["txt"])
+                        lend = word_rel_end
+                        
+                        if len(line) >= 8:  # Create subtitle cue for current line
+                            if lstart is not None and lend > lstart:
+                                cues.append((lstart, lend, " ".join(line)))
                             line, lstart = [], None
-                    if line:
-                        cues.append((lstart,lend," ".join(line)))
+                    
+                    # Handle any remaining words
+                    if line and lstart is not None and lend > lstart:
+                        cues.append((lstart, lend, " ".join(line)))
+                        
+            # Fallback to showing title for full clip duration if no valid word timings
             if not cues:
-                dur = max(0.5, float(end)-float(start))
-                cues=[(0.0, dur, title)]
+                cues=[(0.0, clip_duration, title)]
 
         lines=[]
         for i,(a,b,txt) in enumerate(cues, start=1):
@@ -252,8 +265,8 @@ def build_srts(segments: List[dict],
 
 def _fallback_highlights_from_text(full_text: str,
                                    k=6,
-                                   min_words=8,
-                                   max_words=18) -> List[dict]:
+                                   min_words=5,
+                                   max_words=20) -> List[dict]:
     """
     Deterministic fallback when Gemini returns nothing/blocked:
     - Try sentence-based picks with min_words..max_words
@@ -301,8 +314,8 @@ def _fallback_highlights_from_text(full_text: str,
 
 def _call_gemini_core(full_text: str,
                       clips=6,
-                      min_words=8,
-                      max_words=18,
+                      min_words=5,
+                      max_words=20,
                       model=None,
                       api_key=None,
                       ai_provider_name: str = "gemini",
@@ -316,13 +329,24 @@ def _call_gemini_core(full_text: str,
         return {"highlights":[]}
     # Build prompt
     prompt = (
-        f"You are a video shorts editor.\n"
-        f"Given a speech transcript, pick the {clips} most compelling highlights for social media.\n\n"
+        f"You are a senior social-media video editor and viral-content strategist.\n"
+        f"Given a speech transcript, select the {clips} excerpts most likely to perform as short videos (TikTok/Reels/Shorts).\n\n"
         f"Return ONLY valid JSON with a single key \"highlights\": a list where each item has:\n"
-        f"- \"title\": a catchy title (<= 70 chars)\n"
-        f"- \"excerpt\": exact words copied from the transcript, between {min_words} and {max_words} words.\n\n"
+        f"- \"title\": a punchy, clickable title (<= 70 chars). Prefer hooks (numbers, questions, commands, contrasts), clarity, and immediate benefit.\n"
+        f"- \"excerpt\": exact words copied verbatim from the transcript, between {min_words} and {max_words} words.\n"
+        f"  Excerpts MUST be an exact contiguous substring of the transcript, self-contained (understandable out-of-context), and suitable as an opening line for a 15-45s clip. Trim incidental filler like 'um'/'uh' unless they add character.\n\n"
+        f"Prioritize excerpts that:\n"
+        f"- open with a strong hook, reveal, confession, counterintuitive insight, concrete number, or surprise\n"
+        f"- contain concrete details, vivid imagery, emotions, or a clear actionable takeaway\n"
+        f"- are short, energetic, and edit-friendly (easy to pair with quick cuts/graphics)\n"
+        f"- provide variety across the {clips} picks (mix of emotion, practical tip, story/conflict, provocative question)\n\n"
+        f"Constraints:\n"
+        f"- Exactly one JSON object, nothing else.\n"
+        f"- Only the key \"highlights\" with a list of objects containing \"title\" and \"excerpt\" (extra keys will be ignored).\n"
+        f"- No invented text in \"excerpt\"; it must match the transcript verbatim.\n\n"
+        f"Avoid duplicates and avoid weak, generic lines. Favor short, surprising, emotional, or useful moments that can immediately hook a viewer.\n\n"
         f"Example:\n"
-        f"{{\"highlights\":[{{\"title\":\"...\",\"excerpt\":\"...\"}}]}}\n\n"
+        f"{{\"highlights\":[{{\"title\":\"I lost $10,000 in one week\",\"excerpt\":\"I lost ten thousand dollars in one week and here's what I learned\"}}]}}\n\n"
         f"Transcript:\n"
         f"{full_text[:20000]}"
     )
@@ -407,8 +431,8 @@ def call_gemini(*args,
                 transcript=None,
                 word_timings=None,
                 clips=6,
-                min_words=8,
-                max_words=18,
+                min_words=5,
+                max_words=20,
                 model=None,
                 api_key=None,
                 **kwargs) -> dict:
