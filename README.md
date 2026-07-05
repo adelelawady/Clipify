@@ -416,6 +416,19 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+> **ImageMagick is required for the primary captioning path.** The `VideoProcessor` uses ImageMagick (`magick` or `convert`) to render subtitles. If it is missing, the pipeline falls back to ffmpeg ASS burn-in.
+>
+> On macOS you can install it via conda (recommended if Homebrew fails):
+> ```bash
+> # If you don't have conda yet, install Miniforge
+> curl -L https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-$(uname -m).sh -o miniforge.sh
+> bash miniforge.sh -b -p $HOME/miniforge3
+> $HOME/miniforge3/bin/conda init zsh
+> # Restart your shell, then:
+> conda install -c conda-forge imagemagick
+> ```
+> Verify with: `which magick && magick --version`
+
 3. Start the Gradio UI:
 
 ```bash
