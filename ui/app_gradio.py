@@ -238,6 +238,65 @@ def _remux_audio(source_video: Path, target_video: Path) -> bool:
         return False
 
 
+def _srt_to_captacity_segments(srt_path: Path) -> list:
+    """Convert an SRT file into the segment format expected by captacity_clipify.
+
+    captacity expects segments=[{"words": [{"word": "...", "start": 0.0, "end": 0.5}, ...]}].
+    SRT only has cue-level timings, so we split each cue's text into words and
+    distribute the cue duration evenly across words.
+    """
+    import re
+    if not srt_path.exists():
+        return []
+
+    def _parse_time(t: str) -> float:
+        # SRT time: HH:MM:SS,mmm
+        m = re.match(r"(\d{2}):(\d{2}):(\d{2}),(\d{3})", t)
+        if not m:
+            return 0.0
+        h, mn, s, ms = map(int, m.groups())
+        return h * 3600 + mn * 60 + s + ms / 1000.0
+
+    content = srt_path.read_text(encoding="utf-8")
+    # Split by double newlines to get cues
+    cues = re.split(r"\n\s*\n", content.strip())
+    segments = []
+    for cue in cues:
+        lines = [l.strip() for l in cue.splitlines() if l.strip()]
+        if len(lines) < 2:
+            continue
+        # Find the timing line (contains -->)
+        timing_line = None
+        for line in lines:
+            if "-->" in line:
+                timing_line = line
+                break
+        if not timing_line:
+            continue
+        # Text is everything after the timing line
+        idx = lines.index(timing_line)
+        text = " ".join(lines[idx + 1:])
+        if not text:
+            continue
+        start_str, end_str = timing_line.split("-->")
+        start = _parse_time(start_str.strip())
+        end = _parse_time(end_str.strip())
+        words = text.split()
+        if not words:
+            continue
+        cue_dur = max(0.001, end - start)
+        word_dur = cue_dur / len(words)
+        word_objs = []
+        for i, w in enumerate(words):
+            w_start = start + i * word_dur
+            w_end = start + (i + 1) * word_dur
+            # Add trailing space to all but the last word so concatenation matches the text
+            word_text = w + (" " if i < len(words) - 1 else "")
+            word_objs.append({"word": word_text, "start": w_start, "end": w_end})
+        segments.append({"words": word_objs})
+    return segments
+
+
 def run_pipeline(video_file, clips, min_words, max_words, model, openai_model, fuzzy,
                  font_name, font_size, primary_hex, outline_w, outline_hex, subtitle_style, position, aspect,
                  ai_provider_name, gemini_api_key, openai_api_key,
@@ -433,7 +492,9 @@ def run_pipeline(video_file, clips, min_words, max_words, model, openai_model, f
 
             logger.info("Attempting primary captioning for segment %s via VideoProcessor", idx)
             vp = VideoProcessor(**caption_opts)
-            ok = vp.process_video(str(raw_out), str(sub_out), custom_segments=None)
+            # Convert the SRT we generated for this segment into captacity segments
+            captacity_segments = _srt_to_captacity_segments(srt)
+            ok = vp.process_video(str(raw_out), str(sub_out), custom_segments=captacity_segments)
             if not ok:
                 logger.warning("VideoProcessor reported failure for %s, falling back to ffmpeg ASS burn", raw_out)
                 raise RuntimeError("VideoProcessor failed to burn captions")
