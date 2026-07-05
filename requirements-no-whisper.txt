@@ -3,8 +3,6 @@ moviepy==1.0.3
 numpy==1.26.4
 openai==1.61.0
 requests==2.31.0
-openai-whisper==20231117
-google-generativeai
 gradio
 python-dotenv
 rapidfuzz

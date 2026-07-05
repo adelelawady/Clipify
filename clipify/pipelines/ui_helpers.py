@@ -2,17 +2,63 @@ import json, subprocess, shlex, os, pathlib, shutil
 from pathlib import Path
 from typing import Dict, List, Tuple, Any
 
+def _extract_audio(input_video: Path, output_wav: Path):
+    """Extract mono 16kHz WAV audio from a video file using ffmpeg."""
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", str(input_video),
+        "-ar", "16000", "-ac", "1",
+        "-c:a", "pcm_s16le",
+        str(output_wav)
+    ]
+    subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+
+def _transcribe_video(input_video: Path, tjson: Path):
+    """Transcribe a video with OpenAI Whisper and save word timings as JSON."""
+    import tempfile
+    import whisper
+
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        wav_path = Path(tmp.name)
+
+    try:
+        _extract_audio(input_video, wav_path)
+        model = whisper.load_model("base")
+        result = model.transcribe(str(wav_path), word_timestamps=True)
+
+        word_timings = []
+        for seg in result.get("segments", []):
+            for w in seg.get("words", []):
+                txt = str(w.get("word", "")).strip()
+                if txt:
+                    word_timings.append({
+                        "text": txt,
+                        "start": float(w.get("start", 0)),
+                        "end": float(w.get("end", 0)),
+                    })
+
+        data = {
+            "transcript": result.get("text", "").strip(),
+            "word_timings": word_timings,
+        }
+        tjson.parent.mkdir(parents=True, exist_ok=True)
+        tjson.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    finally:
+        if wav_path.exists():
+            wav_path.unlink()
+
+
 def ensure_transcripts(repo_root: Path, input_video: Path) -> Path:
     tjson = repo_root / "transcripts" / "input_timings.json"
     if tjson.exists():
         return tjson
-    # Make example.py look at "input.mp4"
+    # Make sure the video is available at the expected path
     target = repo_root / "input.mp4"
     if input_video.resolve() != target.resolve():
         shutil.copy2(str(input_video), str(target))
-    # Run transcription via example.py (uses whisper+ffmpeg already wired)
-    cmd = ["python", "example.py"]
-    subprocess.run(cmd, cwd=str(repo_root), check=True)
+    # Run transcription directly via Whisper
+    _transcribe_video(target, tjson)
     if not tjson.exists():
         raise RuntimeError("Transcription failed: transcripts/input_timings.json not created.")
     return tjson

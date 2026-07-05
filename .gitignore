@@ -71,6 +71,7 @@ config.py
 
 # Track specific files despite general exclusion
 !requirements.txt
+!requirements-no-whisper.txt
 !example_config.json 
 
 processed_videos/
