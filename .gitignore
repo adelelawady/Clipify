@@ -37,6 +37,7 @@ ENV/
 *.swp
 *.swo
 .DS_Store
+.pytest_cache/
 
 # Project specific
 processed_content/
@@ -72,4 +73,4 @@ config.py
 !requirements.txt
 !example_config.json 
 
-processed_videos/ 
+processed_videos/
