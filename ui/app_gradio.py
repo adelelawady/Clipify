@@ -532,12 +532,6 @@ def run_pipeline(video_file, clips, min_words, max_words, model, openai_model, f
                 logger.exception("ffmpeg_burn_subs failed for segment %s", idx)
                 raise
 
-        # Remux audio to preserve original audio track
-        try:
-            _remux_audio(REPO / "input.mp4", sub_out)
-        except Exception:
-            logger.warning("Audio remuxing failed for segment %s", idx)
-
         outputs.append(str(sub_out))
         scored_segments.append({"idx": s["idx"], "title": s["title"], "score": s["score"], "path": str(sub_out)})
 
