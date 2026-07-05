@@ -50,11 +50,11 @@ def validate_style_value(key: str, value: Any) -> str:
     elif key in ["Alignment"]:
         try:
             val = int(value)
-            if val in [2, 8]:  # Bottom or top
+            if val in range(1, 12):  # ASS alignments 1-11
                 return str(val)
         except (ValueError, TypeError):
             pass
-        return "2"  # Default to bottom
+        return "2"  # Default to bottom-center
         
     elif key in ["PrimaryColour", "OutlineColour", "BackColour"]:
         return validate_color(value)

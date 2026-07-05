@@ -175,6 +175,39 @@ def get_video_duration(path: Path) -> float:
         return 0.0
 
 
+def _suggest_params(duration: float, total_words: int) -> dict:
+    """Suggest clip parameters based on video duration and transcript word count."""
+    if duration <= 0:
+        duration = 60.0
+    if total_words <= 0:
+        total_words = int(duration * 2.5)  # assume ~150 wpm
+
+    # Number of clips: roughly one per minute, capped between 1 and 8
+    clips = max(1, min(8, round(duration / 60)))
+
+    # Estimate speaking rate and target excerpt length
+    words_per_second = total_words / max(1.0, duration)
+    target_seconds = 7.0
+    target_words = max(5, min(25, round(words_per_second * target_seconds)))
+
+    min_words = max(4, target_words - 5)
+    max_words = max(min_words + 5, target_words + 5)
+
+    # Pads and minimum duration scale slightly with clip density
+    pre_pad = 0.3
+    post_pad = 0.8
+    min_duration = max(5.0, min(20.0, target_seconds * 1.5))
+
+    return {
+        "clips": clips,
+        "min_words": min_words,
+        "max_words": max_words,
+        "pre_pad": pre_pad,
+        "post_pad": post_pad,
+        "min_duration": min_duration,
+    }
+
+
 def _score_excerpt(excerpt: str, start: float, end: float, total_duration: float, min_words: int, max_words: int) -> int:
     """Heuristic virality score (0-100) for an excerpt.
     - prefers medium-long excerpts (within min/max words)
@@ -300,7 +333,8 @@ def _srt_to_captacity_segments(srt_path: Path) -> list:
 def run_pipeline(video_file, clips, min_words, max_words, model, openai_model, fuzzy,
                  font_name, font_size, primary_hex, outline_w, outline_hex, subtitle_style, position, aspect,
                  ai_provider_name, gemini_api_key, openai_api_key,
-                 pre_pad, post_pad, min_duration, auto_size=False):
+                 pre_pad, post_pad, min_duration, auto_size=False,
+                 words_per_caption=3, vertical_offset=85, horizontal_align="center"):
 
     logger.info("run_pipeline called: video=%s clips=%s model=%s provider=%s subtitle_style=%s",
                 str(video_file), clips, model, ai_provider_name, subtitle_style)
@@ -478,16 +512,22 @@ def run_pipeline(video_file, clips, min_words, max_words, model, openai_model, f
             from clipify.video.processor import VideoProcessor
 
             # Map subtitle style to VideoProcessor options
+            # For primary captioning we only have coarse positions; map precise % roughly.
+            coarse_position = position
+            if position == "bottom" and vertical_offset < 50:
+                coarse_position = "center"
+            elif position == "top" and vertical_offset > 50:
+                coarse_position = "center"
+
             caption_opts = {
                 "font": font_path,
                 "font_size": f_size,
                 "font_color": f_primary,
                 "stroke_width": s_w if subtitle_style == "Outline" else 0,
                 "stroke_color": f_outline,
-                # VideoProcessor accepts shadow_strength/shadow_blur, not 'shadow' boolean
-                # For 'Box' style we emulate by increasing stroke and keeping stroke_color
-                "position": position,
+                "position": coarse_position,
                 "padding": 50,
+                "words_per_caption": int(words_per_caption),
             }
 
             logger.info("Attempting primary captioning for segment %s via VideoProcessor", idx)
@@ -523,9 +563,11 @@ def run_pipeline(video_file, clips, min_words, max_words, model, openai_model, f
                 "OutlineColour": css_hex_to_ass(f_outline),
                 "Outline": int(s_w),
                 "BorderStyle": 3,
-                "Alignment": 2 if position == "bottom" else 8
             }
-            logger.info("Calling ffmpeg_burn_subs for segment %s with style %s", idx, {k: style[k] for k in ('FontName','FontSize','Alignment')})
+            alignment, margin_v = _position_to_ass_alignment(position, int(vertical_offset), horizontal_align)
+            style["Alignment"] = alignment
+            style["MarginV"] = margin_v
+            logger.info("Calling ffmpeg_burn_subs for segment %s with style %s", idx, {k: style[k] for k in ('FontName','FontSize','Alignment','MarginV')})
             try:
                 ffmpeg_burn_subs(raw_out, srt, sub_out, aspect=aspect, style=style)
             except Exception:
@@ -542,6 +584,35 @@ def run_pipeline(video_file, clips, min_words, max_words, model, openai_model, f
     status = "\n".join(status_lines)
     logger.info("Generation complete: %s", status.replace('\n', ' | '))
     return status, (outputs[0] if outputs else None), outputs
+
+def _position_to_ass_alignment(position: str, vertical_offset: int, horizontal_align: str) -> tuple:
+    """Map UI position controls to ASS Alignment value and MarginV.
+
+    ASS Alignment values:
+      1=bottom-left, 2=bottom-center, 3=bottom-right
+      4=middle-left, 5=middle-center, 6=middle-right
+      7=top-left,    8=top-center,    9=top-right
+    """
+    # Vertical zone from position/offset
+    if position == "top" or vertical_offset <= 33:
+        row = 7  # top
+    elif position == "bottom" or vertical_offset >= 66:
+        row = 1  # bottom
+    else:
+        row = 4  # middle
+
+    # Horizontal alignment
+    if horizontal_align == "left":
+        col = 0
+    elif horizontal_align == "right":
+        col = 2
+    else:
+        col = 1
+
+    alignment = row + col
+    # MarginV as percentage of 1080p height (common short-form canvas)
+    margin_v = int((vertical_offset / 100.0) * 1080)
+    return alignment, margin_v
 
 with gr.Blocks(title="Clipify — AI Highlights") as demo:
     gr.Markdown("## Clipify — AI Highlights (Gemini)")
@@ -562,6 +633,9 @@ with gr.Blocks(title="Clipify — AI Highlights") as demo:
             pre_pad    = gr.Slider(0.0, 5.0, value=0.5, step=0.1, label="Pre-pad (seconds)")
             post_pad   = gr.Slider(0.0, 5.0, value=1.0, step=0.1, label="Post-pad (seconds)")
             min_duration = gr.Slider(2.0, 30.0, value=15.0, step=0.5, label="Min clip duration (s)")
+            
+            auto_suggest_btn = gr.Button("✨ Auto-suggest params", size="sm")
+            
             model = gr.Dropdown(
                 ["gemini-2.5-flash", "gemini-2.5-pro"],
                 value=os.getenv('GEMINI_MODEL', 'gemini-2.5-flash'),
@@ -581,7 +655,8 @@ with gr.Blocks(title="Clipify — AI Highlights") as demo:
                             value=FONTS_DEFAULT,
                             label="Font Family"
                         )
-                        font_size = gr.Slider(6, 120, value=8, step=1, label="Font Size")
+                        font_size = gr.Slider(6, 120, value=48, step=1, label="Font Size")
+                        words_per_caption = gr.Slider(1, 10, value=3, step=1, label="Words per caption")
                         primary_hex = gr.ColorPicker(value="#FFFFFF", label="Font Color")
                     with gr.Column():
                         subtitle_style = gr.Radio(
@@ -596,7 +671,7 @@ with gr.Blocks(title="Clipify — AI Highlights") as demo:
                 
                 with gr.Row():
                     position = gr.Radio(
-                        ["bottom", "top"],
+                        ["bottom", "center", "top"],
                         value="bottom",
                         label="Position"
                     )
@@ -604,6 +679,17 @@ with gr.Blocks(title="Clipify — AI Highlights") as demo:
                         ["source", "9:16", "4:5", "1:1"],
                         value="source",
                         label="Aspect Ratio"
+                    )
+                
+                with gr.Row():
+                    vertical_offset = gr.Slider(
+                        0, 100, value=85, step=1,
+                        label="Vertical offset (% from top)"
+                    )
+                    horizontal_align = gr.Radio(
+                        ["left", "center", "right"],
+                        value="center",
+                        label="Horizontal alignment"
                     )
                 
                 # Get fonts
@@ -693,7 +779,7 @@ with gr.Blocks(title="Clipify — AI Highlights") as demo:
             
             auto_size = gr.Checkbox(value=True, label="Auto-size clips by video length")
 
-            run = gr.Button("Generate clips")
+            run = gr.Button("Generate")
 
         with gr.Column(scale=2):
             status = gr.Textbox(label="Status")
@@ -709,6 +795,40 @@ with gr.Blocks(title="Clipify — AI Highlights") as demo:
                     return gr.update(visible=False), gr.update(visible=True), gr.update(visible=True)
 
             ai_provider_name.change(_provider_visibility, inputs=[ai_provider_name], outputs=[gemini_api_key, openai_api_key, openai_model])
+
+            # Auto-suggest parameters based on uploaded video
+            def auto_suggest(video_file):
+                if not video_file:
+                    return [gr.update()] * 6
+                try:
+                    src = Path(video_file)
+                    tjson = ensure_transcripts(REPO, src)
+                    _, words = read_timings(tjson)
+                    duration = get_video_duration(REPO / "input.mp4")
+                    p = _suggest_params(duration, len(words))
+                    return [
+                        gr.update(value=p["clips"]),
+                        gr.update(value=p["min_words"]),
+                        gr.update(value=p["max_words"]),
+                        gr.update(value=p["pre_pad"]),
+                        gr.update(value=p["post_pad"]),
+                        gr.update(value=p["min_duration"]),
+                    ]
+                except Exception as e:
+                    logger.warning("Auto-suggest failed: %s", e)
+                    return [gr.update()] * 6
+
+            auto_suggest_btn.click(
+                auto_suggest,
+                inputs=[video_in],
+                outputs=[clips, min_words, max_words, pre_pad, post_pad, min_duration]
+            )
+            # Also trigger when a video is uploaded
+            video_in.change(
+                auto_suggest,
+                inputs=[video_in],
+                outputs=[clips, min_words, max_words, pre_pad, post_pad, min_duration]
+            )
 
             # Two-step process: preview first, then generate
             def preview_clicked(video_file, clips, min_words, max_words, model, openai_model, fuzzy,
@@ -740,11 +860,13 @@ with gr.Blocks(title="Clipify — AI Highlights") as demo:
             def generate_clicked(video_file, clips, min_words, max_words, model, openai_model, fuzzy,
                             font_name, font_size, primary_hex, outline_w, outline_hex, subtitle_style, position, aspect,
                             ai_provider_name, gemini_api_key, openai_api_key,
-                            pre_pad, post_pad, min_duration, auto_size):
+                            pre_pad, post_pad, min_duration, auto_size,
+                            words_per_caption, vertical_offset, horizontal_align):
                 return run_pipeline(video_file, clips, min_words, max_words, model, openai_model, fuzzy,
                                 font_name, font_size, primary_hex, outline_w, outline_hex, subtitle_style, position, aspect,
                                 ai_provider_name, gemini_api_key, openai_api_key,
-                                pre_pad, post_pad, min_duration, auto_size)
+                                pre_pad, post_pad, min_duration, auto_size,
+                                words_per_caption, vertical_offset, horizontal_align)
             
             preview_btn = gr.Button("Preview")
             generate_btn = gr.Button("Generate", visible=False)
@@ -761,7 +883,8 @@ with gr.Blocks(title="Clipify — AI Highlights") as demo:
                 inputs=[video_in, clips, min_words, max_words, model, openai_model, fuzzy,
                     font_name, font_size, primary_hex, outline_w, outline_hex, subtitle_style, position, aspect,
                     ai_provider_name, gemini_api_key, openai_api_key,
-                    pre_pad, post_pad, min_duration, auto_size],
+                    pre_pad, post_pad, min_duration, auto_size,
+                    words_per_caption, vertical_offset, horizontal_align],
                 outputs=[status, preview, files]
             )
 

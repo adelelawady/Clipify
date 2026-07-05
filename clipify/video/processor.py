@@ -23,7 +23,8 @@ class VideoProcessor:
                  padding: int = 50,
                  position: str = "bottom",
                  print_info: bool = False,
-                 initial_prompt: Optional[str] = None):
+                 initial_prompt: Optional[str] = None,
+                 words_per_caption: Optional[int] = None):
         """
         Initialize the video processor with caption styling options
 
@@ -43,6 +44,7 @@ class VideoProcessor:
             position (str): Position of captions ("bottom", "top", or "center") (default: "bottom")
             print_info (bool): Whether to print processing info (default: False)
             initial_prompt (str): Initial prompt for whisper transcription
+            words_per_caption (int): Optional maximum number of words per caption (default: None)
         """
         self.font = font
         self.font_size = font_size
@@ -59,6 +61,7 @@ class VideoProcessor:
         self.position = position
         self.print_info = print_info
         self.initial_prompt = initial_prompt
+        self.words_per_caption = words_per_caption
 
     def process_video(self,
                      input_video: str,
@@ -104,6 +107,34 @@ class VideoProcessor:
                 raise RuntimeError(f"Missing caption dependencies: {', '.join(missing_deps)}")
 
             # Add captions to video using Captacity
+            # Build a fit function that respects the requested words-per-caption limit
+            fit_func = self.fit_function
+            if self.words_per_caption:
+                from captacity_clipify import fits_frame, get_font_path
+                try:
+                    import subprocess
+                    width_cmd = [
+                        "ffprobe", "-v", "error", "-select_streams", "v:0",
+                        "-show_entries", "stream=width",
+                        "-of", "csv=s=x:p=0", input_video
+                    ]
+                    frame_width = int(subprocess.check_output(width_cmd, stderr=subprocess.DEVNULL).decode().strip())
+                except Exception:
+                    frame_width = 1080
+                text_bbox_width = max(100, frame_width - self.padding * 2)
+                base_fit = fit_func if fit_func else fits_frame(
+                    self.line_count,
+                    get_font_path(self.font),
+                    self.font_size,
+                    self.stroke_width,
+                    text_bbox_width,
+                )
+                max_words = self.words_per_caption
+                def fit_func(text):
+                    if len(text.split()) > max_words:
+                        return False
+                    return base_fit(text)
+
             add_captions(
                 video_file=input_video,
                 output_file=output_video,
@@ -119,7 +150,7 @@ class VideoProcessor:
                 shadow_strength=self.shadow_strength, 
                 shadow_blur=self.shadow_blur,
                 line_count=self.line_count,
-                fit_function=self.fit_function,
+                fit_function=fit_func,
                 padding=self.padding,
                 position=self.position,
                 
