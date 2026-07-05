@@ -24,7 +24,12 @@ wheels/
 venv/
 env/
 ENV/
+
+# Environment files (don't commit secrets)
 .env
+.env.*
+.env.save
+
 
 # IDE specific files
 .idea/
@@ -56,7 +61,7 @@ __pycache__/
 # API Keys and Secrets
 secrets.py
 config.py
-.env
+
 
 # Temporary files
 *.tmp
