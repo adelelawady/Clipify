@@ -62,7 +62,7 @@ if not logger.handlers:
 
 
 def _gather_fonts(repo: Path):
-    """Find fonts in repo/fonts, ui/fonts, and system locations with metadata."""
+    """Find fonts in repo/fonts, ui/fonts, system locations and bundled captacity assets."""
     try:
         import fontTools.ttLib as ttLib
     except ImportError:
@@ -73,10 +73,18 @@ def _gather_fonts(repo: Path):
     fonts_map = {}   # name -> path
     fonts_meta = {}  # name -> metadata
 
+    # Locate fonts bundled with captacity_clipify
+    try:
+        import captacity_clipify
+        captacity_fonts_dir = Path(captacity_clipify.__file__).resolve().parent / "assets" / "fonts"
+    except Exception:
+        captacity_fonts_dir = None
+
     # Look in standard locations
     search_paths = [
         repo / "fonts",
         repo / "ui" / "fonts",
+        captacity_fonts_dir,
         Path("/Library/Fonts"),
         Path("/System/Library/Fonts"),
         Path("/System/Library/Fonts/Supplemental")
@@ -104,12 +112,12 @@ def _gather_fonts(repo: Path):
                 'family': family or font_path.stem,
                 'style': style or 'Regular'
             }
-        except:
+        except Exception:
             return {'family': font_path.stem, 'style': 'Regular'}
 
     # Scan for fonts
     for path in search_paths:
-        if not path.exists():
+        if not path or not path.exists():
             continue
 
         for font_file in path.glob('**/*'):
@@ -127,41 +135,26 @@ def _gather_fonts(repo: Path):
                 except Exception as e:
                     print(f"Warning: Could not process font {font_file}: {e}")
 
-    # Set default font
+    # Set default font: prefer Bangers-Regular.ttf, then any Regular, then first available
     default_font = None
-    for name in fonts_list:
-        if "Regular" in name or "regular" in name:
+    for name, path in fonts_map.items():
+        if Path(path).name.lower() == "bangers-regular.ttf":
             default_font = name
             break
-
+    if default_font is None:
+        for name in fonts_list:
+            if "Bangers" in name:
+                default_font = name
+                break
+    if default_font is None:
+        for name in fonts_list:
+            if "Regular" in name or "regular" in name:
+                default_font = name
+                break
     if default_font is None and fonts_list:
         default_font = fonts_list[0]
 
     return fonts_list, fonts_map, default_font
-    for p in search_paths:
-        try:
-            if not p.exists():
-                continue
-            for ext in ("*.ttf", "*.otf"):
-                for f in sorted(p.glob(ext)):
-                    n = f.name
-                    if n not in fmap:
-                        fmap[n] = str(f)
-                        names.append(n)
-        except Exception:
-            continue
-
-    # sensible defaults
-    default = None
-    for prefer in ("Bangers-Regular.ttf", "Arial.ttf", "Arial"):
-        if prefer in fmap:
-            default = prefer
-            break
-    if default is None and names:
-        default = names[0]
-    if default is None:
-        default = "Arial"
-    return names, fmap, default
 
 # discover fonts once at module import
 FONTS_LIST, FONTS_MAP, FONTS_DEFAULT = _gather_fonts(REPO)
@@ -214,10 +207,11 @@ def _score_excerpt(excerpt: str, start: float, end: float, total_duration: float
 
 
 def _remux_audio(source_video: Path, target_video: Path) -> bool:
-    """Copy audio stream from source_video into target_video, preserving video.
+    """Copy audio stream from source_video into target_video and normalize loudness.
 
     Some captioning tools (e.g. captacity) drop the audio track. This helper
-    re-injects the original audio into the captioned output using ffmpeg.
+    re-injects the original audio into the captioned output using ffmpeg and
+    applies a loudnorm filter for more consistent, broadcast-friendly levels.
     """
     import subprocess
     tmp = target_video.with_suffix(".tmp" + target_video.suffix)
@@ -227,7 +221,9 @@ def _remux_audio(source_video: Path, target_video: Path) -> bool:
         "-i", str(source_video),
         "-map", "0:v:0",
         "-map", "1:a:0?",
-        "-c", "copy",
+        "-c:v", "copy",
+        "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
+        "-c:a", "aac", "-b:a", "192k",
         "-shortest",
         str(tmp)
     ]
